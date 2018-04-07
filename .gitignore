@@ -1,0 +1,6 @@
+*.o
+*.swp
+*.d
+*.bin
+test
+*.map
