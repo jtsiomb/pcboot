@@ -12,6 +12,8 @@
 	mov %ax, %ds
 	mov %ax, %es
 
+	mov %dl, drive_number
+
 	call clearscr
 
 	mov $_boot2_size, %eax
@@ -32,7 +34,7 @@
 	shr $4, %bx
 	mov %bx, %es
 	xor %bx, %bx
-	call readsect
+	call read_sect
 	jmp boot2_addr
 
 	cli
@@ -42,37 +44,65 @@
 
 	.set ARG_NSECT, 6
 	.set ARG_SIDX, 4
-	.set VAR_NTRACKS, -2
 
-# readsect(first, num)
-readsect:
+# read_sect(first, num)
+read_sect:
 	push %bp
 	mov %sp, %bp
-	sub $2, %sp
 
-	# calculate how many tracks to read
-	mov ARG_NSECT(%bp), %ax
-	xor %dx, %dx
-	mov $SECT_PER_TRACK, %cx
-	div %cx
-	cmp $0, %dx
-	jz 0f
-	inc %ax
-0:	mov %ax, VAR_NTRACKS(%bp)
+	mov ARG_SIDX(%bp), %ax
+	mov ARG_NSECT(%bp), %cx
 
-	xor %cx, %cx
-0:	cmp VAR_NTRACKS(%bp), %cx
-	jz 0f
-	push %cx
-	call read_track
-	pop %cx
-	jmp 0b
-0:
-	# TODO cont.
+	jmp 1f
+0:	push %ax
+	call read_sector
+	add $2, %sp
+1:	cmp ARG_NSECT(%bp), %cx
+	jnz 0b
+
 	pop %bp
 	ret
 
-read_track:
+# read_sector(sidx)
+read_sector:
+	push %bp
+	mov %sp, %bp
+	push %cx
+	push %dx
+
+	# calculate the track (sidx / sectors_per_track)
+	mov 4(%bp), %ax
+	xor %dx, %dx
+	mov $SECT_PER_TRACK, %cx
+	div %cx
+	mov %ax, %cx
+	# save the remainder in ax
+	mov %dx, %ax
+	# head in dh
+	mov %cl, %dh
+	and $1, %dh
+	# cylinder (track/2) in ch [0-7] and cl[6,7]<-[8,9]
+	rol $7, %cx
+	ror $2, %cl
+	and $0xc0, %cl
+	# sector num cl[0-5] is sidx % sectors_per_track (saved in ax)
+	inc %al
+	or %al, %cl 
+	# ah = 2 (read), al = 1 sectors
+	mov $0x0201, %ax
+	movb drive_number, %dl
+	int $0x13
+
+	# increment es:bx accordingly (advance es if bx overflows)
+	add $512, %bx
+	jno 0f
+	mov %es, %ax
+	add $4096, %ax
+	mov %ax, %es
+
+	pop %dx
+	pop %cx
+	pop %bp
 	ret
 
 clearscr:
@@ -86,6 +116,7 @@ clearscr:
 	pop %es
 	ret
 
+# expects number in eax
 print_num:
 	# save es
 	push %es
@@ -122,6 +153,7 @@ print_num:
 	pop %es
 	ret
 
+drive_number: .byte 0
 numbuf: .space 10
 	.org 510
 	.byte 0x55
