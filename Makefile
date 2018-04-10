@@ -45,4 +45,4 @@ cleandep:
 
 .PHONY: run
 run: $(bin)
-	qemu-system-i386 -fda floppy.img
+	qemu-system-i386 -fda floppy.img -serial file:serial.log

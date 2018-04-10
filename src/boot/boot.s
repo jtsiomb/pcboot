@@ -14,7 +14,7 @@
 
 	mov %dl, drive_number
 
-	call clearscr
+	call setup_serial
 
 	mov $_boot2_size, %eax
 	call print_num
@@ -66,6 +66,10 @@ read_sectors:
 	ret
 
 	.set VAR_ATTEMPTS, -2
+str_rdsec_msg: .asciz "rdsec: "
+str_cyl_msg: .asciz " C "
+str_head_msg: .asciz " H "
+str_sec_msg: .asciz " S "
 
 # read_sector(sidx)
 read_sector:
@@ -80,6 +84,9 @@ read_sector:
 .Lread_try:
 	# calculate the track (sidx / sectors_per_track)
 	mov 4(%bp), %ax
+	mov $str_rdsec_msg, %si
+	call print_str_num16
+
 	xor %dx, %dx
 	mov $SECT_PER_TRACK, %cx
 	div %cx
@@ -95,7 +102,25 @@ read_sector:
 	and $0xc0, %cl
 	# sector num cl[0-5] is sidx % sectors_per_track (saved in ax)
 	inc %al
-	or %al, %cl 
+	or %al, %cl
+
+	mov $str_cyl_msg, %si
+	mov %cx, %ax
+	rol $2, %al
+	and $3, %al
+	ror $8, %ax
+	call print_str_num16
+
+	mov $str_head_msg, %si
+	xor %ax, %ax
+	mov %dh, %al
+	call print_str_num16
+
+	mov $str_sec_msg, %si
+	mov %cl, %al
+	and $0x3f, %ax
+	call print_str_num16
+
 	# ah = 2 (read), al = 1 sectors
 	mov $0x0201, %ax
 	movb drive_number, %dl
@@ -129,40 +154,44 @@ read_sector:
 	pop %bp
 	ret
 
-str_read_error: .asciz "Failed to read sector: "
+str_read_error: .asciz "err read sector: "
 
 abort_read:
-	push %ax
 	mov $str_read_error, %si
-	call print_str
-
-	xor %eax, %eax
-	pop %ax
-	call print_num
-
+	call print_str_num16
 	cli
 	hlt
 
-clearscr:
-	push %es
-	pushw $0xb800
-	pop %es
-	xor %eax, %eax
-	xor %di, %di
-	movl $500, %ecx
-	rep stosl
-	pop %es
-	ret
-
 cursor_x: .byte 0
 
-# expects string pointer in ds:si
+	# prints a string (ds:si) followed by a number (eax)
+print_str_num:
+	push %eax
+	call print_str
+	pop %eax
+	call print_num
+	mov $10, %al
+	call ser_putchar
+	ret
+
+print_str_num16:
+	push %eax
+	and $0xffff, %eax
+	call print_str_num
+	pop %eax
+	ret
+
+	# expects string pointer in ds:si
 print_str:
 	push %es
+	pusha
+
 	pushw $0xb800
 	pop %es
 	xor %di, %di
 	movb $0, cursor_x
+
+	push %si
 
 0:	mov (%si), %al
 	mov %al, %es:(%di)
@@ -173,13 +202,18 @@ print_str:
 	cmp $0, %al
 	jnz 0b
 
+	pop %si
+	call ser_putstr
+
+	popa
 	pop %es
 	ret
 
-# expects number in eax
+	# expects number in eax
 print_num:
-	# save es
+	# save registers
 	push %es
+	pusha
 
 	xor %cx, %cx
 	movw $numbuf, %si
@@ -205,6 +239,7 @@ print_num:
 0:	dec %si
 	mov (%si), %al
 	movb %al, %es:(%di)
+	call ser_putchar
 	inc %di
 	mov $7, %al
 	movb %al, %es:(%di)
@@ -212,12 +247,88 @@ print_num:
 	dec %cx
 	jnz 0b
 
-	# restore es
+	# restore regs
+	popa
 	pop %es
 	ret
 
+	.set UART_DATA, 0x3f8
+	.set UART_DIVLO, 0x3f8
+	.set UART_DIVHI, 0x3f9
+	.set UART_FIFO, 0x3fa
+	.set UART_LCTL, 0x3fb
+	.set UART_MCTL, 0x3fc
+	.set UART_LSTAT, 0x3fd
+	.set DIV_9600, 115200 / 9600
+	.set LCTL_8N1, 0x03
+	.set LCTL_DLAB, 0x80
+	.set FIFO_ENABLE, 0x01
+	.set FIFO_SEND_CLEAR, 0x04
+	.set FIFO_RECV_CLEAR, 0x02
+	.set MCTL_DTR, 0x01
+	.set MCTL_RTS, 0x02
+	.set MCTL_OUT2, 0x08
+	.set LST_TREG_EMPTY, 0x20
+
+setup_serial:
+	# set clock divisor
+	mov $LCTL_DLAB, %al
+	mov $UART_LCTL, %dx
+	out %al, %dx
+	mov $DIV_9600, %ax
+	mov $UART_DIVLO, %dx
+	out %al, %dx
+	shr $8, %ax
+	mov $UART_DIVHI, %dx
+	out %al, %dx
+	# set format 8n1
+	mov $LCTL_8N1, %al
+	mov $UART_LCTL, %dx
+	out %al, %dx
+	# clear and enable fifo
+	mov $FIFO_ENABLE, %al
+	or $FIFO_SEND_CLEAR, %al
+	or $FIFO_RECV_CLEAR, %al
+	mov $UART_FIFO, %dx
+	out %al, %dx
+	# assert RTS and DTR
+	mov $MCTL_DTR, %al
+	or $MCTL_RTS, %al
+	or $MCTL_OUT2, %al
+	mov $UART_MCTL, %dx
+	out %al, %dx
+	ret
+
+	# expects a character in al
+ser_putchar:
+	push %dx
+
+	mov %al, %ah
+	# wait until the transmit register is empty
+	mov $UART_LSTAT, %dx
+0:	in %dx, %al
+	and $LST_TREG_EMPTY, %al
+	jz 0b
+	mov $UART_DATA, %dx
+	mov %ah, %al
+	out %al, %dx
+
+	pop %dx
+	ret
+
+	# expects a string in ds:si
+ser_putstr:
+	mov (%si), %al
+	cmp $0, %al
+	jz 0f
+	call ser_putchar
+	inc %si
+	jmp ser_putstr
+0:	ret
+	
+
 drive_number: .byte 0
-numbuf: .space 10
+numbuf: .space 8
 	.org 510
 	.byte 0x55
 	.byte 0xaa
