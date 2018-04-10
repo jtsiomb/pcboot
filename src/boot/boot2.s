@@ -5,20 +5,44 @@
 	mov $0x13, %ax
 	int $0x10
 
-	pushw $63
-	pushw $63
-	pushw $0
-	pushw $0xff
-	call set_palette
-	add $8, %sp
+	# copy palette
+	mov $logo_pal, %si
+	xor %cl, %cl
 
+0:	mov $0x3c8, %dx
+	movb %cl, %al
+	outb %al, %dx
+	inc %dx
+	# red
+	movb (%si), %al
+	inc %si
+	shr $2, %al
+	outb %al, %dx
+	# green
+	movb (%si), %al
+	inc %si
+	shr $2, %al
+	outb %al, %dx
+	# blue
+	movb (%si), %al
+	inc %si
+	shr $2, %al
+	outb %al, %dx
+	inc %cl
+	jno 0b
+
+	# copy pixels
 	pushw $0xa000
 	pop %es
 	xor %di, %di
+	mov $logo_pix, %eax
+	shr $4, %eax
+	mov %ax, %ds
+	xor %si, %si
 	mov $16000, %ecx
-	mov $0xffffffff, %eax
-	rep stosl
+	rep movsl
 
+	cli
 	hlt
 
 set_palette:
@@ -34,3 +58,10 @@ set_palette:
 	movw 8(%bp), %ax
 	outb %al, %dx
 	ret
+
+logo_pal:
+	.incbin "logo.pal"
+
+	.align 16
+logo_pix:
+	.incbin "logo.raw"

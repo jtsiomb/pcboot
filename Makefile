@@ -20,6 +20,10 @@ ifneq ($(shell uname -m), i386)
 	ldarch = -m elf_i386
 endif
 
+floppy.img: $(bin)
+	dd if=/dev/zero of=$@ bs=512 count=2880
+	dd if=$< of=$@ conv=notrunc
+
 $(bin): $(elf)
 	objcopy -O binary $< $@
 
@@ -41,4 +45,4 @@ cleandep:
 
 .PHONY: run
 run: $(bin)
-	qemu-system-i386 -fda $(bin)
+	qemu-system-i386 -fda floppy.img

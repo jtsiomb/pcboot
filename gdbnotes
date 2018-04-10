@@ -7,4 +7,4 @@ b *0x7c00
 
 examine register with: i r eax
 
-$ objdump -D test
+$ objdump -D test -m i8086
