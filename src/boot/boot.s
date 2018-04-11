@@ -1,12 +1,15 @@
 	.code16
 	.section .boot,"a"
 
+	.set scratchbuf, 0x7b00
+
+boot:
 	cli
 	cld
 	# move stack to just below the code
 	xor %ax, %ax
 	mov %ax, %ss
-	mov $0x7c00, %sp
+	mov $0x7b00, %sp
 	# use the code segment for data access
 	mov %cs, %ax
 	mov %ax, %ds
@@ -15,9 +18,6 @@
 	mov %dl, drive_number
 
 	call setup_serial
-
-	mov $_boot2_size, %eax
-	call print_num
 
 	# load the second stage boot loader and jump to it
 	mov $_boot2_size, %eax
@@ -36,9 +36,6 @@
 	xor %bx, %bx
 	call read_sectors
 	jmp boot2_addr
-
-	cli
-	hlt
 
 	.set SECT_PER_TRACK, 18
 
@@ -141,6 +138,11 @@ read_sector:
 	jmp abort_read
 
 .Lread_ok:
+	# DBG print first dword
+	mov $str_read_error + 4, %si
+	mov %es:(%bx), %eax
+	call print_str_num
+
 	# increment es:bx accordingly (advance es if bx overflows)
 	add $512, %bx
 	jno 0f
@@ -154,12 +156,11 @@ read_sector:
 	pop %bp
 	ret
 
-str_read_error: .asciz "err read sector: "
+str_read_error: .asciz "err read sect: "
 
 abort_read:
 	mov $str_read_error, %si
 	call print_str_num16
-	cli
 	hlt
 
 cursor_x: .byte 0
@@ -170,6 +171,8 @@ print_str_num:
 	call print_str
 	pop %eax
 	call print_num
+	mov $13, %al
+	call ser_putchar
 	mov $10, %al
 	call ser_putchar
 	ret
@@ -216,7 +219,7 @@ print_num:
 	pusha
 
 	xor %cx, %cx
-	movw $numbuf, %si
+	movw $scratchbuf, %si
 	mov $10, %ebx
 
 0:	xor %edx, %edx
@@ -328,7 +331,6 @@ ser_putstr:
 	
 
 drive_number: .byte 0
-numbuf: .space 8
 	.org 510
 	.byte 0x55
 	.byte 0xaa
