@@ -1,7 +1,8 @@
 	.code16
 	.section .boot,"a"
 
-	.set scratchbuf, 0x7b00
+	.set scratchbuf, 0x7bf0
+	.set scratchbuf_size, 16
 
 boot:
 	cli
@@ -9,7 +10,7 @@ boot:
 	# move stack to just below the code
 	xor %ax, %ax
 	mov %ax, %ss
-	mov $0x7b00, %sp
+	mov $0x7bf0, %sp
 	# use the code segment for data access
 	mov %cs, %ax
 	mov %ax, %ds
@@ -19,8 +20,15 @@ boot:
 
 	call setup_serial
 
+	mov $loading_msg, %si
+	call print_str
+
 	# load the second stage boot loader and jump to it
 	mov $_boot2_size, %eax
+	call print_num
+	mov $loading_msg2, %si
+	call print_str
+
 	mov %eax, %ebx
 	shr $9, %eax
 	and $0x1ff, %ebx
@@ -41,6 +49,37 @@ boot:
 
 	.set ARG_NSECT, 6
 	.set ARG_SIDX, 4
+
+loading_msg: .asciz "Loading "
+loading_msg2: .asciz " bytes\n"
+
+sect_per_track: .short 18
+num_cylinders: .short 80
+num_heads: .short 2
+heads_mask: .byte 1
+
+get_drive_chs:
+	movb drive_number, %dl
+	mov $8, %ah
+	int $0x13
+	jnc .Lok
+	ret
+
+.Lok:	mov %ch, %al
+	mov %cl, %ah
+	rol $2, %ah
+	and $0x3ff, %ax
+	mov %ax, num_cylinders
+
+	mov %cx, sect_per_track
+	andw $0x3f, sect_per_track
+
+	shr $8, %dx
+	mov %dx, num_heads
+	dec %dl
+	mov %dl, heads_mask
+
+	ret
 
 # read_sectors(first, num)
 read_sectors:
@@ -63,7 +102,6 @@ read_sectors:
 	ret
 
 	.set VAR_ATTEMPTS, -2
-#str_rdsec_msg: .asciz "rdsec: "
 
 # read_sector(sidx)
 read_sector:
@@ -78,23 +116,28 @@ read_sector:
 .Lread_try:
 	# calculate the track (sidx / sectors_per_track)
 	mov 4(%bp), %ax
-#	mov $str_rdsec_msg, %si
-#	call print_str_num16
 
 	xor %dx, %dx
-	mov $SECT_PER_TRACK, %cx
+	mov sect_per_track, %cx
 	div %cx
 	mov %ax, %cx
-	# save the remainder in ax
-	mov %dx, %ax
+	# save the remainder
+	push %dx
 	# head in dh
 	mov %cl, %dh
-	and $1, %dh
-	# cylinder (track/2) in ch [0-7] and cl[6,7]<-[8,9]
-	rol $7, %cx
+	and heads_mask, %dh
+	# cylinder (track/heads) in ch [0-7] and cl[6,7]<-[8,9]
+	push %dx
+	xor %dx, %dx
+	movw num_heads, %cx
+	div %cx
+	pop %dx
+	mov %ax, %cx
+	rol $8, %cx
 	ror $2, %cl
 	and $0xc0, %cl
-	# sector num cl[0-5] is sidx % sectors_per_track (saved in ax)
+	# sector num cl[0-5] is sidx % sectors_per_track + 1
+	pop %ax
 	inc %al
 	or %al, %cl
 
@@ -118,10 +161,8 @@ read_sector:
 	jmp abort_read
 
 .Lread_ok:
-	# DBG print first dword
-#	mov $str_read_error + 4, %si
-#	mov %es:(%bx), %eax
-#	call print_str_num
+	mov $46, %ax
+	call print_char
 
 	# increment es:bx accordingly (advance es if bx overflows)
 	add $512, %bx
@@ -136,14 +177,12 @@ read_sector:
 	pop %bp
 	ret
 
-str_read_error: .asciz "err read sect: "
+str_read_error: .asciz "read error, sector: "
 
 abort_read:
 	mov $str_read_error, %si
 	call print_str_num16
 	hlt
-
-cursor_x: .byte 0
 
 	# prints a string (ds:si) followed by a number (eax)
 print_str_num:
@@ -151,8 +190,6 @@ print_str_num:
 	call print_str
 	pop %eax
 	call print_num
-	mov $13, %al
-	call ser_putchar
 	mov $10, %al
 	call ser_putchar
 	ret
@@ -166,74 +203,58 @@ print_str_num16:
 
 	# expects string pointer in ds:si
 print_str:
-	push %es
 	pusha
 
+0:	mov (%si), %al
+	cmp $0, %al
+	jz .Lend
+	call print_char
+	inc %si
+	jmp 0b
+
+.Lend:	popa
+	ret
+
+	# expects character in al
+print_char:
+	push %es
 	pushw $0xb800
 	pop %es
-	xor %di, %di
-	movb $0, cursor_x
+	movw cursor_x, %di
+	shl $1, %di
 
-	push %si
-
-0:	mov (%si), %al
 	mov %al, %es:(%di)
 	movb $7, %es:1(%di)
-	inc %si
-	add $2, %di
-	incb cursor_x
-	cmp $0, %al
-	jnz 0b
+	incw cursor_x
 
-	pop %si
-	call ser_putstr
-
-	popa
+	call ser_putchar
 	pop %es
 	ret
+
+cursor_x: .short 0
 
 	# expects number in eax
 	.global print_num
 print_num:
 	# save registers
-	push %es
 	pusha
 
-	xor %cx, %cx
-	movw $scratchbuf, %si
+	movw $scratchbuf + scratchbuf_size, %si
+	movb $0, (%si)
 	mov $10, %ebx
-
-0:	xor %edx, %edx
+.Lconvloop:
+	xor %edx, %edx
 	div %ebx
 	add $48, %dl
+	dec %si
 	mov %dl, (%si)
-	inc %si
-	inc %cx
 	cmp $0, %eax
-	jnz 0b
+	jnz .Lconvloop
 
-	# print the backwards string
-	pushw $0xb800
-	pop %es
-	movb cursor_x, %al
-	xor %ah, %ah
-	shl $1, %ax
-	mov %ax, %di
-
-0:	dec %si
-	mov (%si), %al
-	movb %al, %es:(%di)
-	call ser_putchar
-	inc %di
-	mov $7, %al
-	movb %al, %es:(%di)
-	inc %di
-	dec %cx
-	jnz 0b
+	call print_str
 
 	# restore regs
 	popa
-	pop %es
 	ret
 
 	.set UART_DATA, 0x3f8
@@ -288,28 +309,25 @@ setup_serial:
 ser_putchar:
 	push %dx
 
-	mov %al, %ah
+	cmp $10, %al
+	jnz 0f
+	push %ax
+	mov $13, %al
+	call ser_putchar
+	pop %ax
+
+0:	mov %al, %ah
 	# wait until the transmit register is empty
 	mov $UART_LSTAT, %dx
-0:	in %dx, %al
+.Lwait:	in %dx, %al
 	and $LST_TREG_EMPTY, %al
-	jz 0b
+	jz .Lwait
 	mov $UART_DATA, %dx
 	mov %ah, %al
 	out %al, %dx
 
 	pop %dx
 	ret
-
-	# expects a string in ds:si
-ser_putstr:
-	mov (%si), %al
-	cmp $0, %al
-	jz 0f
-	call ser_putchar
-	inc %si
-	jmp ser_putstr
-0:	ret
 	
 
 drive_number: .byte 0
