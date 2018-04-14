@@ -2,6 +2,9 @@
 	.code16
 	.section .boot2,"a"
 
+	.extern print_num
+	.extern ser_putchar
+
 	mov $0x13, %ax
 	int $0x10
 
@@ -9,27 +12,58 @@
 	mov $logo_pal, %si
 	xor %cl, %cl
 
-0:	mov $0x3c8, %dx
+0:	xor %eax, %eax
+	mov $0x3c8, %dx
 	movb %cl, %al
 	outb %al, %dx
+	#DBG
+	call print_num
+	mov $58, %al
+	call ser_putchar
+	mov $32, %al
+	call ser_putchar
+	xor %eax, %eax
+	####
 	inc %dx
 	# red
 	movb (%si), %al
 	inc %si
 	shr $2, %al
 	outb %al, %dx
+	#DBG
+	call print_num
+	mov $32, %al
+	call ser_putchar
+	xor %eax, %eax
+	####
 	# green
 	movb (%si), %al
 	inc %si
 	shr $2, %al
 	outb %al, %dx
+	#DBG
+	call print_num
+	mov $32, %al
+	call ser_putchar
+	xor %eax, %eax
+	####
 	# blue
 	movb (%si), %al
 	inc %si
 	shr $2, %al
 	outb %al, %dx
-	inc %cl
-	jno 0b
+	#DBG
+	call print_num
+	mov $32, %al
+	call ser_putchar
+	mov $13, %al
+	call ser_putchar
+	mov $10, %al
+	call ser_putchar
+	xor %eax, %eax
+	####
+	add $1, %cl
+	jnc 0b
 
 	# copy pixels
 	pushw $0xa000
@@ -44,20 +78,6 @@
 
 	cli
 	hlt
-
-set_palette:
-	mov %sp, %bp
-	mov $0x3c8, %dx
-	movw 2(%bp), %ax
-	outb %al, %dx
-	inc %dx
-	movw 4(%bp), %ax
-	outb %al, %dx
-	movw 6(%bp), %ax
-	outb %al, %dx
-	movw 8(%bp), %ax
-	outb %al, %dx
-	ret
 
 logo_pal:
 	.incbin "logo.pal"

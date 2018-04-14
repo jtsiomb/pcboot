@@ -63,10 +63,7 @@ read_sectors:
 	ret
 
 	.set VAR_ATTEMPTS, -2
-str_rdsec_msg: .asciz "rdsec: "
-str_cyl_msg: .asciz " C "
-str_head_msg: .asciz " H "
-str_sec_msg: .asciz " S "
+#str_rdsec_msg: .asciz "rdsec: "
 
 # read_sector(sidx)
 read_sector:
@@ -81,8 +78,8 @@ read_sector:
 .Lread_try:
 	# calculate the track (sidx / sectors_per_track)
 	mov 4(%bp), %ax
-	mov $str_rdsec_msg, %si
-	call print_str_num16
+#	mov $str_rdsec_msg, %si
+#	call print_str_num16
 
 	xor %dx, %dx
 	mov $SECT_PER_TRACK, %cx
@@ -100,23 +97,6 @@ read_sector:
 	# sector num cl[0-5] is sidx % sectors_per_track (saved in ax)
 	inc %al
 	or %al, %cl
-
-	mov $str_cyl_msg, %si
-	mov %cx, %ax
-	rol $2, %al
-	and $3, %al
-	ror $8, %ax
-	call print_str_num16
-
-	mov $str_head_msg, %si
-	xor %ax, %ax
-	mov %dh, %al
-	call print_str_num16
-
-	mov $str_sec_msg, %si
-	mov %cl, %al
-	and $0x3f, %ax
-	call print_str_num16
 
 	# ah = 2 (read), al = 1 sectors
 	mov $0x0201, %ax
@@ -139,13 +119,13 @@ read_sector:
 
 .Lread_ok:
 	# DBG print first dword
-	mov $str_read_error + 4, %si
-	mov %es:(%bx), %eax
-	call print_str_num
+#	mov $str_read_error + 4, %si
+#	mov %es:(%bx), %eax
+#	call print_str_num
 
 	# increment es:bx accordingly (advance es if bx overflows)
 	add $512, %bx
-	jno 0f
+	jnc 0f
 	mov %es, %ax
 	add $4096, %ax
 	mov %ax, %es
@@ -213,6 +193,7 @@ print_str:
 	ret
 
 	# expects number in eax
+	.global print_num
 print_num:
 	# save registers
 	push %es
@@ -303,6 +284,7 @@ setup_serial:
 	ret
 
 	# expects a character in al
+	.global ser_putchar
 ser_putchar:
 	push %dx
 

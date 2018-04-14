@@ -37,7 +37,7 @@ $(elf): $(obj)
 
 .PHONY: clean
 clean:
-	rm -f $(obj) $(bin)
+	rm -f $(obj) $(bin) floppy.img
 
 .PHONY: cleandep
 cleandep:
