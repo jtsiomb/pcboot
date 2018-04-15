@@ -7,6 +7,9 @@
 	mov $0x13, %ax
 	int $0x10
 
+	movb $10, %al
+	call ser_putchar
+
 	# copy palette
 	mov $logo_pal, %si
 	xor %cl, %cl

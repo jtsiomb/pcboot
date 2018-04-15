@@ -1,16 +1,19 @@
 	.code16
 	.section .boot,"a"
 
+	.set stack_top, 0x7be0
+	.set read_retries, 0x7be8
+	.set drive_number, 0x7bec
+	.set cursor_x, 0x7bee
 	.set scratchbuf, 0x7bf0
 	.set scratchbuf_size, 16
 
 boot:
 	cli
-	cld
 	# move stack to just below the code
 	xor %ax, %ax
 	mov %ax, %ss
-	mov $0x7bf0, %sp
+	mov $stack_top, %sp
 	# use the code segment for data access
 	mov %cs, %ax
 	mov %ax, %ds
@@ -20,14 +23,14 @@ boot:
 
 	call setup_serial
 
+	call get_drive_chs
+
 	mov $loading_msg, %si
 	call print_str
 
 	# load the second stage boot loader and jump to it
 	mov $_boot2_size, %eax
 	call print_num
-	mov $loading_msg2, %si
-	call print_str
 
 	mov %eax, %ebx
 	shr $9, %eax
@@ -45,13 +48,11 @@ boot:
 	call read_sectors
 	jmp boot2_addr
 
-	.set SECT_PER_TRACK, 18
-
 	.set ARG_NSECT, 6
 	.set ARG_SIDX, 4
 
-loading_msg: .asciz "Loading "
-loading_msg2: .asciz " bytes\n"
+loading_msg: .asciz "\nLoad "
+driveno_msg: .asciz "Drive: "
 
 sect_per_track: .short 18
 num_cylinders: .short 80
@@ -59,26 +60,45 @@ num_heads: .short 2
 heads_mask: .byte 1
 
 get_drive_chs:
+	mov $driveno_msg, %si
+	call print_str
+	xor %eax, %eax
 	movb drive_number, %dl
+	mov %dl, %al
+	call print_num
+	mov $10, %al
+	call print_char
+
 	mov $8, %ah
 	int $0x13
 	jnc .Lok
 	ret
 
-.Lok:	mov %ch, %al
+.Lok:	xor %eax, %eax
+	mov %ch, %al
 	mov %cl, %ah
 	rol $2, %ah
+	inc %ax
 	and $0x3ff, %ax
 	mov %ax, num_cylinders
 
+	and $0x3f, %cx
 	mov %cx, sect_per_track
-	andw $0x3f, sect_per_track
 
 	shr $8, %dx
-	mov %dx, num_heads
-	dec %dl
 	mov %dl, heads_mask
+	inc %dx
+	mov %dx, num_heads
 
+	call print_num
+	mov $47, %al
+	call print_char
+	mov %dx, %ax
+	call print_num
+	mov $47, %al
+	call print_char
+	mov %cx, %ax
+	call print_num
 	ret
 
 # read_sectors(first, num)
@@ -101,17 +121,14 @@ read_sectors:
 	pop %bp
 	ret
 
-	.set VAR_ATTEMPTS, -2
-
 # read_sector(sidx)
 read_sector:
 	push %bp
 	mov %sp, %bp
-	sub $2, %sp
 	push %cx
 	push %dx
 
-	movw $3, VAR_ATTEMPTS(%bp)
+	movw $3, read_retries
 
 .Lread_try:
 	# calculate the track (sidx / sectors_per_track)
@@ -148,7 +165,7 @@ read_sector:
 	jnc .Lread_ok
 
 	# abort after 3 attempts
-	decw VAR_ATTEMPTS(%bp)
+	decw read_retries
 	jz .Lread_fail
 
 	# error detected, reset controller and retry
@@ -173,33 +190,19 @@ read_sector:
 
 0:	pop %dx
 	pop %cx
-	add $2, %sp
 	pop %bp
 	ret
 
-str_read_error: .asciz "read error, sector: "
+str_read_error: .asciz "rderr: "
 
 abort_read:
 	mov $str_read_error, %si
-	call print_str_num16
-	hlt
-
-	# prints a string (ds:si) followed by a number (eax)
-print_str_num:
-	push %eax
 	call print_str
-	pop %eax
+	and $0xffff, %eax
 	call print_num
 	mov $10, %al
-	call ser_putchar
-	ret
-
-print_str_num16:
-	push %eax
-	and $0xffff, %eax
-	call print_str_num
-	pop %eax
-	ret
+	call print_char
+	hlt
 
 	# expects string pointer in ds:si
 print_str:
@@ -230,8 +233,6 @@ print_char:
 	call ser_putchar
 	pop %es
 	ret
-
-cursor_x: .short 0
 
 	# expects number in eax
 	.global print_num
@@ -329,10 +330,7 @@ ser_putchar:
 	pop %dx
 	ret
 	
-
-drive_number: .byte 0
 	.org 510
 	.byte 0x55
 	.byte 0xaa
-
 boot2_addr:
