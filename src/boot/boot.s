@@ -69,7 +69,7 @@ boot:
 	.set ARG_SIDX, 4
 
 loading_msg: .asciz "\nLoad "
-driveno_msg: .asciz "Drive: "
+driveno_msg: .asciz "Drv:"
 
 sect_per_track: .short 18
 num_cylinders: .short 80
@@ -210,7 +210,7 @@ read_sector:
 	pop %bp
 	ret
 
-str_read_error: .asciz "rderr: "
+str_read_error: .asciz "rderr:"
 
 abort_read:
 	mov $str_read_error, %si
@@ -238,7 +238,13 @@ print_str:
 	# expects character in al
 print_char:
 	push %es
-	pushw $0xb800
+
+	push %ax
+	cmp $10, %ax
+	jnz 0f
+	mov $32, %ax
+
+0:	pushw $0xb800
 	pop %es
 	movw cursor_x, %di
 	shl $1, %di
@@ -247,6 +253,7 @@ print_char:
 	movb $7, %es:1(%di)
 	incw cursor_x
 
+	pop %ax
 	call ser_putchar
 	pop %es
 	ret
@@ -285,12 +292,8 @@ print_num:
 	.set DIV_9600, 115200 / 9600
 	.set LCTL_8N1, 0x03
 	.set LCTL_DLAB, 0x80
-	.set FIFO_ENABLE, 0x01
-	.set FIFO_SEND_CLEAR, 0x04
-	.set FIFO_RECV_CLEAR, 0x02
-	.set MCTL_DTR, 0x01
-	.set MCTL_RTS, 0x02
-	.set MCTL_OUT2, 0x08
+	.set FIFO_ENABLE_CLEAR, 0x07
+	.set MCTL_DTR_RTS_OUT2, 0x0b
 	.set LST_TREG_EMPTY, 0x20
 
 setup_serial:
@@ -309,15 +312,11 @@ setup_serial:
 	mov $UART_LCTL, %dx
 	out %al, %dx
 	# clear and enable fifo
-	mov $FIFO_ENABLE, %al
-	or $FIFO_SEND_CLEAR, %al
-	or $FIFO_RECV_CLEAR, %al
+	mov $FIFO_ENABLE_CLEAR, %al
 	mov $UART_FIFO, %dx
 	out %al, %dx
 	# assert RTS and DTR
-	mov $MCTL_DTR, %al
-	or $MCTL_RTS, %al
-	or $MCTL_OUT2, %al
+	mov $MCTL_DTR_RTS_OUT2, %al
 	mov $UART_MCTL, %dx
 	out %al, %dx
 	ret
