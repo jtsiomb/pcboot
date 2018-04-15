@@ -48,6 +48,7 @@ boot:
 	mov $_boot2_size, %eax
 	call print_num
 
+	mov $_boot2_size, %eax
 	mov %eax, %ebx
 	shr $9, %eax
 	and $0x1ff, %ebx
