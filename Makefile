@@ -9,8 +9,8 @@ warn = -pedantic -Wall
 dbg = -g
 inc = -Isrc -Isrc/libc
 
-CFLAGS = $(ccarch) $(warn) $(dbg) -nostdinc -fno-builtin $(inc) $(def)
-ASFLAGS = $(asarch) $(dbg) -nostdinc -fno-builtin $(inc)
+CFLAGS = $(ccarch) -march=i386 $(warn) $(dbg) -nostdinc -fno-builtin $(inc) $(def)
+ASFLAGS = $(asarch) -march=i386 $(dbg) -nostdinc -fno-builtin $(inc)
 LDFLAGS = $(ldarch) -T pcboot.ld -print-gc-sections
 
 

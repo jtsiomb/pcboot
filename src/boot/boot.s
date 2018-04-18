@@ -322,7 +322,6 @@ setup_serial:
 	ret
 
 	# expects a character in al
-	.global ser_putchar
 ser_putchar:
 	push %dx
 
