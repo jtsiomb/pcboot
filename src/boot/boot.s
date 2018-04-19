@@ -88,10 +88,10 @@ get_drive_chs:
 
 	mov $8, %ah
 	int $0x13
-	jnc .Lok
+	jnc ok
 	ret
 
-.Lok:	xor %eax, %eax
+ok:	xor %eax, %eax
 	mov %ch, %al
 	mov %cl, %ah
 	rol $2, %ah
@@ -147,7 +147,7 @@ read_sector:
 
 	movw $3, read_retries
 
-.Lread_try:
+read_try:
 	# calculate the track (sidx / sectors_per_track)
 	mov 4(%bp), %ax
 
@@ -179,22 +179,22 @@ read_sector:
 	mov $0x0201, %ax
 	movb drive_number, %dl
 	int $0x13
-	jnc .Lread_ok
+	jnc read_ok
 
 	# abort after 3 attempts
 	decw read_retries
-	jz .Lread_fail
+	jz read_fail
 
 	# error detected, reset controller and retry
 	xor %ah, %ah
 	int $0x13
-	jmp .Lread_try
+	jmp read_try
 
-.Lread_fail:
+read_fail:
 	mov 4(%bp), %ax
 	jmp abort_read
 
-.Lread_ok:
+read_ok:
 	mov $46, %ax
 	call print_char
 
@@ -227,12 +227,12 @@ print_str:
 
 0:	mov (%si), %al
 	cmp $0, %al
-	jz .Lend
+	jz end
 	call print_char
 	inc %si
 	jmp 0b
 
-.Lend:	popa
+end:	popa
 	ret
 
 	# expects character in al
@@ -267,14 +267,14 @@ print_num:
 	movw $scratchbuf + scratchbuf_size, %si
 	movb $0, (%si)
 	mov $10, %ebx
-.Lconvloop:
+convloop:
 	xor %edx, %edx
 	div %ebx
 	add $48, %dl
 	dec %si
 	mov %dl, (%si)
 	cmp $0, %eax
-	jnz .Lconvloop
+	jnz convloop
 
 	call print_str
 
@@ -335,9 +335,9 @@ ser_putchar:
 0:	mov %al, %ah
 	# wait until the transmit register is empty
 	mov $UART_LSTAT, %dx
-.Lwait:	in %dx, %al
+wait:	in %dx, %al
 	and $LST_TREG_EMPTY, %al
-	jz .Lwait
+	jz wait
 	mov $UART_DATA, %dx
 	mov %ah, %al
 	out %al, %dx

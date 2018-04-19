@@ -18,11 +18,11 @@
 	.code16
 	.section .boot2,"a"
 
-	.set drive_number, 0x7bec
-	# reset floppy drive
-	xor %ax, %ax
-	movb drive_number, %dl
-	int $0x13
+	# make sure any BIOS call didn't re-enable interrupts
+	cli
+
+	mov $0x13, %ax
+	int $0x10
 
 	# load initial GDT/IDT
 	lgdt (gdt_lim)
@@ -43,11 +43,8 @@
 	mov %ax, %gs
 	mov %ax, %fs
 
-	mov $0x18, %ax
-	ltr %ax
-
-	#movb $10, %al
-	#call ser_putchar
+	movb $10, %al
+	call ser_putchar
 
 	call clearscr
 
@@ -57,13 +54,15 @@
 	# enable A20 line
 	call enable_a20
 
+	call logohack
+
 	cli
 	hlt
 
 hello: .asciz "Switched to 32bit\n"
 
 	.align 4
-gdt_lim: .word 31
+gdt_lim: .word 23
 gdt_base:.long gdt
 
 	.align 4
@@ -81,11 +80,6 @@ gdt:	# 0: null segment
 	# 2: data - base:0, lim:4g, G:4k, 32bit, avl, pres|app, dpl:0, type:data/rw
 	.long 0x0000ffff
 	.long 0x00cf9200
-	# 3: dummy TSS - base:tss, lim:103, type avail 32bit TSS, byte-granular
-	.short 103
-	.short tss
-	.short 0x8900
-	.short 0
 
 
 	.align 8
@@ -97,10 +91,7 @@ idt:	.space 104
 	.short 0x8f00
 	.short 0
 
-	.align 4
-tss:	.space 104
-
-gpf_msg: .asciz "GPF "
+gpf_msg: .asciz "GP fault "
 
 prot_fault:
 	mov (%esp), %eax
@@ -115,24 +106,19 @@ prot_fault:
 	hlt
 
 ena20_msg: .asciz "A20 line enabled\n"
-foo_msg: .asciz "Foo\n"
 
 enable_a20:
-	mov $foo_msg, %esi
-	call putstr
-	jmp .La20done
-
 	call test_a20
-	jnc .La20done
+	jnc a20done
 	call enable_a20_kbd
 	call test_a20
-	jnc .La20done
+	jnc a20done
 	call enable_a20_fast
 	call test_a20
-	jnc .La20done
+	jnc a20done
 	# keep trying ... we can't do anything useful without A20 anyway
 	jmp enable_a20
-.La20done:
+a20done:
 	mov $ena20_msg, %esi
 	call putstr
 	ret
@@ -146,8 +132,7 @@ test_a20:
 	subl $0xbaadf00d, (%ebx)
 	ret
 
-ena20_fast_msg: .asciz "Attempting fast A20 enable\n"
-
+	# enable A20 line through port 0x92 (fast A20)
 enable_a20_fast:
 	mov $ena20_fast_msg, %esi
 	call putstr
@@ -157,6 +142,10 @@ enable_a20_fast:
 	out %al, $0x92
 	ret
 
+ena20_fast_msg: .asciz "Attempting fast A20 enable\n"
+
+
+	# enable A20 line through the keyboard controller
 	.set KBC_DATA_PORT, 0x60
 	.set KBC_CMD_PORT, 0x64
 	.set KBC_STATUS_PORT, 0x64
@@ -166,9 +155,6 @@ enable_a20_fast:
 	.set KBC_STAT_OUT_RDY, 0x01
 	.set KBC_STAT_IN_FULL, 0x02
 
-ena20_kbd_msg: .asciz "Attempting KBD A20 enable\n"
-
-	# enable A20 line through the keyboard controller
 enable_a20_kbd:
 	mov $ena20_kbd_msg, %esi
 	call putstr
@@ -180,6 +166,8 @@ enable_a20_kbd:
 	mov $0xdf, %al
 	out %al, $KBC_DATA_PORT
 	ret
+
+ena20_kbd_msg: .asciz "Attempting KBD A20 enable\n"
 
 	# wait until the keyboard controller is ready to accept another byte
 kbc_wait_write:
@@ -241,14 +229,14 @@ print_num:
 	mov $numbuf + 16, %esi
 	movb $0, (%esi)
 	mov $10, %ebx
-.Lconvloop:
+convloop:
 	xor %edx, %edx
 	div %ebx
 	add $48, %dl
 	dec %esi
 	mov %dl, (%esi)
 	cmp $0, %eax
-	jnz .Lconvloop
+	jnz convloop
 
 	call putstr
 
@@ -305,9 +293,9 @@ ser_putchar:
 0:	mov %al, %ah
 	# wait until the transmit register is empty
 	mov $UART_LSTAT, %dx
-.Lwait:	in %dx, %al
+wait:	in %dx, %al
 	and $LST_TREG_EMPTY, %al
-	jz .Lwait
+	jz wait
 	mov $UART_DATA, %dx
 	mov %ah, %al
 	out %al, %dx
@@ -316,13 +304,9 @@ ser_putchar:
 	ret
 
 
-	.code16
 logohack:
-	mov $0x13, %ax
-	int $0x10
-
 	# copy palette
-	mov $logo_pal, %si
+	mov $logo_pal, %esi
 	xor %cl, %cl
 
 0:	xor %eax, %eax
@@ -331,98 +315,84 @@ logohack:
 	outb %al, %dx
 	inc %dx
 	# red
-	movb (%si), %al
-	inc %si
+	movb (%esi), %al
+	inc %esi
 	shr $2, %al
 	outb %al, %dx
 	# green
-	movb (%si), %al
-	inc %si
+	movb (%esi), %al
+	inc %esi
 	shr $2, %al
 	outb %al, %dx
 	# blue
-	movb (%si), %al
-	inc %si
+	movb (%esi), %al
+	inc %esi
 	shr $2, %al
 	outb %al, %dx
 	add $1, %cl
 	jnc 0b
 
 	# copy pixels
-	pushw $0xa000
-	pop %es
-	mov $logo_pix, %eax
-	shr $4, %eax
-	#mov %ax, %ds
-	mov %ax, %gs
-	#mov $16000, %ecx
-	#rep movsl
+	mov $sintab, %ebp
+	mov $logo_pix, %esi
+frameloop:
+	mov $0xa0000, %edi
+	movl $0, yval
+yloop:
+	movl $0, xval
+xloop:
+	# calc src scanline address -> ebx
+	xor %ecx, %ecx
+	mov yval, %ebx
+	shl $2, %ebx
+	add frameno, %ebx
+	and $0xff, %ebx
+	mov (%ebp, %ebx), %cl
+	shr $5, %ecx
 
-	mov $sintab, %eax
-	shr $4, %eax
-	mov %ax, %fs
-
-.Lframeloop:
-	xor %di, %di
-
-	movw $0, yval
-.Lyloop:
-	movw $0, xval
-.Lxloop:
-	# calc src scanline address -> bx
-	mov yval, %bx
-	shl $2, %bx
-	add frameno, %bx
-	xor %bh, %bh
-	mov %fs:(%bx), %cl
-	xor %ch, %ch
-	shr $5, %cx
-
-	mov yval, %ax
-	add %cx, %ax
+	mov yval, %eax
+	add %ecx, %eax
 	# bounds check
-	cmp $200, %ax
+	cmp $200, %eax
 	jl 0f
-	mov $199, %ax
+	mov $199, %eax
 
-0:	mov %ax, %bx
-	shl $8, %ax
-	shl $6, %bx
-	add %ax, %bx
+0:	mov %eax, %ebx
+	shl $8, %eax
+	shl $6, %ebx
+	add %eax, %ebx
 
-	# calc src x offset -> si
-	mov xval, %ax
-	shl $2, %ax
-	add frameno, %ax
-	xor %ah, %ah
-	mov %ax, %si
-	mov %fs:(%si), %cl
-	xor %ch, %ch
-	shr $5, %cx
+	# calc src x offset -> eax
+	xor %ecx, %ecx
+	mov xval, %eax
+	shl $2, %eax
+	add frameno, %eax
+	and $0xff, %eax
+	mov (%ebp, %eax), %cl
+	shr $5, %ecx
 
-	mov xval, %ax
-	add %cx, %ax
+	mov xval, %eax
+	add %ecx, %eax
 	# bounds check
-	cmp $320, %ax
+	cmp $320, %eax
 	jl 0f
-	mov $319, %ax
+	mov $319, %eax
 
-0:	mov %ax, %si
+0:	add %eax, %ebx
+	mov (%ebx, %esi), %al
 
-	mov %gs:(%bx, %si), %al
+	mov %al, (%edi)
+	inc %edi
 
-	mov %al, %es:(%di)
-	inc %di
+	incl xval
+	cmpl $320, xval
+	jnz xloop
 
-	incw xval
-	cmpw $320, xval
-	jnz .Lxloop
+	incl yval
+	cmpl $200, yval
+	jnz yloop
 
-	incw yval
-	cmpw $200, yval
-	jnz .Lyloop
-
-	incw frameno
+	incl frameno
 
 	# wait vsync
 	mov $0x3da, %dx
@@ -432,27 +402,11 @@ logohack:
 0:	in %dx, %al
 	and $8, %al
 	jz 0b
-	jmp .Lframeloop
+	jmp frameloop
 
-xval: .word 0
-yval: .word 0
-frameno: .word 0
-
-	# expects string pointer in ds:si
-ser_print_str:
-	pusha
-
-0:	mov (%si), %al
-	cmp $0, %al
-	jz .Lend
-	call ser_putchar
-	inc %si
-	jmp 0b
-
-.Lend:	popa
-	ret
-
-
+xval: .long 0
+yval: .long 0
+frameno: .long 0
 
 numbuf: .space 16
 
