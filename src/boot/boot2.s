@@ -21,6 +21,9 @@
 	# make sure any BIOS call didn't re-enable interrupts
 	cli
 
+	# just in case we were loaded from floppy, turn all floppy motors off
+	call motor_off
+
 	mov $0x13, %ax
 	int $0x10
 
@@ -303,6 +306,13 @@ wait:	in %dx, %al
 	pop %dx
 	ret
 
+
+motor_off:
+	mov $0x3f2, %dx
+	in %dx, %al
+	and $0xf0, %al
+	out %al, %dx
+	ret
 
 logohack:
 	# copy palette
