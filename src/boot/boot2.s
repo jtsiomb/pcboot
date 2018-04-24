@@ -18,19 +18,34 @@
 	.code16
 	.section .boot2,"a"
 
+	.set main_load_addr, 0x100000
+
 	# make sure any BIOS call didn't re-enable interrupts
 	cli
 
-	# just in case we were loaded from floppy, turn all floppy motors off
-	call motor_off
+	# enter unreal mode
+	call unreal
+
+	movb $10, %al
+	call ser_putchar
+
+	call clearscr
+
+	# enable A20 address line
+	call enable_a20
+
+	# load the whole program into memory starting at 1MB
+	call load_main
 
 	mov $0x13, %ax
 	int $0x10
 
-	# load initial GDT/IDT
+	# load initial GDT
 	lgdt (gdt_lim)
+	# load initial IDT
 	lidt (idt_lim)
-	# enable protection
+
+	# enter protected mode for the first time
 	mov %cr0, %eax
 	or $1, %eax
 	mov %eax, %cr0
@@ -46,23 +61,13 @@
 	mov %ax, %gs
 	mov %ax, %fs
 
-	movb $10, %al
-	call ser_putchar
-
-	call clearscr
-
-	mov $hello, %esi
-	call putstr
-
-	# enable A20 line
-	call enable_a20
-
-	call logohack
+	jmp main_load_addr
 
 	cli
-	hlt
+0:	hlt
+	jmp 0b
 
-hello: .asciz "Switched to 32bit\n"
+
 
 	.align 4
 gdt_lim: .word 23
@@ -108,76 +113,239 @@ prot_fault:
 	call putchar
 	hlt
 
-ena20_msg: .asciz "A20 line enabled\n"
+	.code16
+unreal:
+	# use the same GDT above, will use data segment: 2
+	lgdt (gdt_lim)
 
-enable_a20:
-	call test_a20
-	jnc a20done
-	call enable_a20_kbd
-	call test_a20
-	jnc a20done
-	call enable_a20_fast
-	call test_a20
-	jnc a20done
-	# keep trying ... we can't do anything useful without A20 anyway
-	jmp enable_a20
-a20done:
-	mov $ena20_msg, %esi
+	mov %cr0, %eax
+	or $1, %ax
+	mov %eax, %cr0
+	jmp 0f
+
+0:	mov $0x10, %ax
+	mov %ax, %ds
+	mov %ax, %es
+	mov %ax, %fs
+	mov %ax, %gs
+	mov %ax, %ss
+
+	mov %cr0, %eax
+	and $0xfffe, %ax
+	mov %eax, %cr0
+
+	xor %ax, %ax
+	mov %ax, %ds
+	mov %ax, %es
+	mov %ax, %fs
+	mov %ax, %gs
+	mov %ax, %ss
+	ret
+
+mainsz_msg: .asciz "Main program size: "
+mainsz_msg2: .asciz " ("
+mainsz_msg3: .asciz " sectors)\n"
+
+first_sect: .long 0
+sect_left: .long 0
+cur_track: .long 0
+trk_sect: .long 0
+dest_ptr: .long 0
+
+load_main:
+	movl $main_load_addr, dest_ptr
+
+	# calculate first sector
+	mov $_boot2_size, %eax
+	add $511, %eax
+	shr $9, %eax
+	# add 1 to account for the boot sector
+	inc %eax
+	mov %eax, first_sect
+
+	# calculate the first track (first_sect / sect_per_track)
+	movzxw sect_per_track, %ecx
+	xor %edx, %edx
+	div %ecx
+	mov %eax, cur_track
+	# remainder is sector within track
+	mov %edx, trk_sect
+
+	mov $mainsz_msg, %esi
 	call putstr
-	ret
+	mov $_main_size, %eax
+	mov %eax, %ecx
+	call print_num
 
-	# CF = 1 if A20 test fails (not enabled)
-test_a20:
-	mov $0x07c000, %ebx
-	mov $0x17c000, %edx
-	movl $0xbaadf00d, (%ebx)
-	movl $0xaabbcc42, (%edx)
-	subl $0xbaadf00d, (%ebx)
-	ret
-
-	# enable A20 line through port 0x92 (fast A20)
-enable_a20_fast:
-	mov $ena20_fast_msg, %esi
+	mov $mainsz_msg2, %esi
 	call putstr
 
-	in $0x92, %al
-	or $2, %al
-	out %al, $0x92
-	ret
+	# calculate sector count
+	add $511, %eax
+	shr $9, %eax
+	mov %eax, sect_left
 
-ena20_fast_msg: .asciz "Attempting fast A20 enable\n"
-
-
-	# enable A20 line through the keyboard controller
-	.set KBC_DATA_PORT, 0x60
-	.set KBC_CMD_PORT, 0x64
-	.set KBC_STATUS_PORT, 0x64
-	.set KBC_CMD_RD_OUTPORT, 0xd0
-	.set KBC_CMD_WR_OUTPORT, 0xd1
-
-	.set KBC_STAT_OUT_RDY, 0x01
-	.set KBC_STAT_IN_FULL, 0x02
-
-enable_a20_kbd:
-	mov $ena20_kbd_msg, %esi
+	call print_num
+	mov $mainsz_msg3, %esi
 	call putstr
 
-	call kbc_wait_write
-	mov $KBC_CMD_WR_OUTPORT, %al
-	out %al, $KBC_CMD_PORT
-	call kbc_wait_write
-	mov $0xdf, %al
-	out %al, $KBC_DATA_PORT
+	# read a whole track into the buffer (or partial first track)
+ldloop:
+	movzxw sect_per_track, %ecx
+	sub trk_sect, %ecx
+	push %ecx
+	call read_track
+
+	mov buffer, %eax
+	call print_num
+	mov $10, %al
+	call putchar
+
+	# copy to high memory
+	mov $buffer, %esi
+	mov dest_ptr, %edi
+	mov (%esp), %ecx
+	shl $9, %ecx
+	add %ecx, dest_ptr
+	shr $2, %ecx
+	addr32 rep movsl
+
+	incl cur_track
+	# other than the first track which might be partial, all the rest start from 0
+	movl $0, trk_sect
+
+	pop %ecx
+	sub %ecx, sect_left
+	ja ldloop
+
+	# the BIOS might have enabled interrupts
+	cli
+
+	# just in case we were loaded from floppy, turn all floppy motors off
+	mov $0x3f2, %dx
+	in %dx, %al
+	and $0xf0, %al
+	out %al, %dx
+
+	mov $10, %ax
+	call putchar
+
+	# DBG
+	hlt
+
 	ret
 
-ena20_kbd_msg: .asciz "Attempting KBD A20 enable\n"
+rdtrk_msg: .asciz "Reading track: "
+rdcyl_msg: .asciz " - cyl: "
+rdhead_msg: .asciz " head: "
+rdsect_msg: .asciz " start sect: "
 
-	# wait until the keyboard controller is ready to accept another byte
-kbc_wait_write:
-	in $KBC_STATUS_PORT, %al
-	and $KBC_STAT_IN_FULL, %al
-	jnz kbc_wait_write
+read_retries: .short 0
+
+	.set drive_number, 0x7bec
+read_track:
+	# set es to the start of the destination buffer to allow reading in
+	# full 64k chunks if necessary
+	mov $buffer, %bx
+	shr $4, %bx
+	mov %bx, %es
+	xor %ebx, %ebx
+
+	movw $3, read_retries
+
+read_try:
+	# print track
+	mov $rdtrk_msg, %esi
+	call putstr
+	mov cur_track, %eax
+	call print_num
+	mov $rdcyl_msg, %esi
+	call putstr
+
+	# calc cylinder (cur_track / num_heads) and head (cur_track % num_heads)
+	mov cur_track, %eax
+	movzxw num_heads, %ecx
+	xor %edx, %edx
+	div %ecx
+
+	# print cylinder
+	push %eax
+	call print_num
+	# print head
+	mov $rdhead_msg, %esi
+	call putstr
+	movzx %dx, %eax
+	call print_num
+	pop %eax
+
+	# head in dh
+	mov %dl, %dh
+
+	# cylinder low byte at ch and high bits at cl[7, 6]
+	mov %al, %ch
+	mov %ah, %cl
+	and $3, %cl
+	ror $2, %cl
+
+	# print start sector
+	mov $rdsect_msg, %esi
+	call putstr
+	mov trk_sect, %eax
+	call print_num
+	mov $10, %al
+	call putchar
+
+	# start sector (1-based) in cl[0, 5]
+	mov trk_sect, %al
+	inc %al
+	and $0x3f, %al
+	or %al, %cl
+
+	# number of sectors in al
+	mov 2(%esp), %ax
+	# call number (2) in ah
+	mov $2, %ah
+	# drive number in dl
+	movb drive_number, %dl
+	int $0x13
+	jnc read_ok
+
+	# abort after 3 attempts
+	decw read_retries
+	jz read_fail
+
+	# error, reset controller and retry
+	xor %ah, %ah
+	int $0x13
+	jmp read_try
+
+read_fail:
+	jmp abort_read
+
+read_ok:
+	mov $35, %ax
+	call putchar
+
+	# reset es to 0 before returning
+	xor %ax, %ax
+	mov %ax, %es
 	ret
+
+str_read_error: .asciz "Read error while reading track: "
+
+abort_read:
+	mov $str_read_error, %esi
+	call putstr
+	mov cur_track, %eax
+	call print_num
+	mov $10, %al
+	call putchar
+
+	cli
+0:	hlt
+	jmp 0b
+
+
 
 	# better print routines, since we're not constrainted by the 512b of
 	# the boot sector.
@@ -259,24 +427,24 @@ video_newline:
 
 scrollup:
 	pusha
-	# move 80 * 24 lines from b8050 -> b8000
+	# move 80 * 24 lines from b80a0 -> b8000
 	mov $0xb8000, %edi
-	mov $0xb8050, %esi
-	mov $480, %ecx
-	rep movsl
-	# clear last line (b8780)
-	mov $0xb8780, %edi
+	mov $0xb80a0, %esi
+	mov $960, %ecx
+	addr32 rep movsl
+	# clear last line (b8f00)
+	mov $0xb8f00, %edi
 	xor %eax, %eax
-	mov $20, %ecx
-	rep stosl
+	mov $40, %ecx
+	addr32 rep stosl
 	popa
 	ret
 
 clearscr:
 	mov $0xb8000, %edi
 	xor %eax, %eax
-	mov $500, %ecx
-	rep stosl
+	mov $1000, %ecx
+	addr32 rep stosl
 	ret
 
 	.set UART_DATA, 0x3f8
@@ -307,380 +475,79 @@ wait:	in %dx, %al
 	ret
 
 
-motor_off:
-	mov $0x3f2, %dx
-	in %dx, %al
-	and $0xf0, %al
-	out %al, %dx
+
+ena20_msg: .asciz "A20 line enabled\n"
+
+enable_a20:
+	call test_a20
+	jnc a20done
+	call enable_a20_kbd
+	call test_a20
+	jnc a20done
+	call enable_a20_fast
+	call test_a20
+	jnc a20done
+	# keep trying ... we can't do anything useful without A20 anyway
+	jmp enable_a20
+a20done:
+	mov $ena20_msg, %esi
+	call putstr
 	ret
 
-logohack:
-	# copy palette
-	mov $logo_pal, %esi
-	xor %cl, %cl
+	# CF = 1 if A20 test fails (not enabled)
+test_a20:
+	mov $0x07c000, %ebx
+	mov $0x17c000, %edx
+	movl $0xbaadf00d, (%ebx)
+	movl $0xaabbcc42, (%edx)
+	subl $0xbaadf00d, (%ebx)
+	ret
 
-0:	xor %eax, %eax
-	mov $0x3c8, %dx
-	movb %cl, %al
-	outb %al, %dx
-	inc %dx
-	# red
-	movb (%esi), %al
-	inc %esi
-	shr $2, %al
-	outb %al, %dx
-	# green
-	movb (%esi), %al
-	inc %esi
-	shr $2, %al
-	outb %al, %dx
-	# blue
-	movb (%esi), %al
-	inc %esi
-	shr $2, %al
-	outb %al, %dx
-	add $1, %cl
-	jnc 0b
+	# enable A20 line through port 0x92 (fast A20)
+enable_a20_fast:
+	mov $ena20_fast_msg, %esi
+	call putstr
 
-	# copy pixels
-	mov $sintab, %ebp
-	mov $logo_pix, %esi
-frameloop:
-	mov $0xa0000, %edi
-	movl $0, yval
-yloop:
-	movl $0, xval
-xloop:
-	# calc src scanline address -> ebx
-	xor %ecx, %ecx
-	mov yval, %ebx
-	shl $2, %ebx
-	add frameno, %ebx
-	and $0xff, %ebx
-	mov (%ebp, %ebx), %cl
-	shr $5, %ecx
+	in $0x92, %al
+	or $2, %al
+	out %al, $0x92
+	ret
 
-	mov yval, %eax
-	add %ecx, %eax
-	# bounds check
-	cmp $200, %eax
-	jl 0f
-	mov $199, %eax
+ena20_fast_msg: .asciz "Attempting fast A20 enable\n"
 
-0:	mov %eax, %ebx
-	shl $8, %eax
-	shl $6, %ebx
-	add %eax, %ebx
 
-	# calc src x offset -> eax
-	xor %ecx, %ecx
-	mov xval, %eax
-	shl $2, %eax
-	add frameno, %eax
-	and $0xff, %eax
-	mov (%ebp, %eax), %cl
-	shr $5, %ecx
+	# enable A20 line through the keyboard controller
+	.set KBC_DATA_PORT, 0x60
+	.set KBC_CMD_PORT, 0x64
+	.set KBC_STATUS_PORT, 0x64
+	.set KBC_CMD_RD_OUTPORT, 0xd0
+	.set KBC_CMD_WR_OUTPORT, 0xd1
 
-	mov xval, %eax
-	add %ecx, %eax
-	# bounds check
-	cmp $320, %eax
-	jl 0f
-	mov $319, %eax
+	.set KBC_STAT_OUT_RDY, 0x01
+	.set KBC_STAT_IN_FULL, 0x02
 
-0:	add %eax, %ebx
-	mov (%ebx, %esi), %al
+enable_a20_kbd:
+	mov $ena20_kbd_msg, %esi
+	call putstr
 
-	mov %al, (%edi)
-	inc %edi
+	call kbc_wait_write
+	mov $KBC_CMD_WR_OUTPORT, %al
+	out %al, $KBC_CMD_PORT
+	call kbc_wait_write
+	mov $0xdf, %al
+	out %al, $KBC_DATA_PORT
+	ret
 
-	incl xval
-	cmpl $320, xval
-	jnz xloop
+ena20_kbd_msg: .asciz "Attempting KBD A20 enable\n"
 
-	incl yval
-	cmpl $200, yval
-	jnz yloop
-
-	incl frameno
-
-	# wait vsync
-	mov $0x3da, %dx
-0:	in %dx, %al
-	and $8, %al
-	jnz 0b
-0:	in %dx, %al
-	and $8, %al
-	jz 0b
-	jmp frameloop
-
-xval: .long 0
-yval: .long 0
-frameno: .long 0
+	# wait until the keyboard controller is ready to accept another byte
+kbc_wait_write:
+	in $KBC_STATUS_PORT, %al
+	and $KBC_STAT_IN_FULL, %al
+	jnz kbc_wait_write
+	ret
 
 numbuf: .space 16
 
-logo_pal:
-	.incbin "logo.pal"
-
 	.align 16
-logo_pix:
-	.incbin "logo.raw"
-
-sintab:
-	.byte 127
-	.byte 130
-	.byte 133
-	.byte 136
-	.byte 139
-	.byte 143
-	.byte 146
-	.byte 149
-	.byte 152
-	.byte 155
-	.byte 158
-	.byte 161
-	.byte 164
-	.byte 167
-	.byte 170
-	.byte 173
-	.byte 176
-	.byte 179
-	.byte 182
-	.byte 184
-	.byte 187
-	.byte 190
-	.byte 193
-	.byte 195
-	.byte 198
-	.byte 200
-	.byte 203
-	.byte 205
-	.byte 208
-	.byte 210
-	.byte 213
-	.byte 215
-	.byte 217
-	.byte 219
-	.byte 221
-	.byte 224
-	.byte 226
-	.byte 228
-	.byte 229
-	.byte 231
-	.byte 233
-	.byte 235
-	.byte 236
-	.byte 238
-	.byte 239
-	.byte 241
-	.byte 242
-	.byte 244
-	.byte 245
-	.byte 246
-	.byte 247
-	.byte 248
-	.byte 249
-	.byte 250
-	.byte 251
-	.byte 251
-	.byte 252
-	.byte 253
-	.byte 253
-	.byte 254
-	.byte 254
-	.byte 254
-	.byte 254
-	.byte 254
-	.byte 255
-	.byte 254
-	.byte 254
-	.byte 254
-	.byte 254
-	.byte 254
-	.byte 253
-	.byte 253
-	.byte 252
-	.byte 251
-	.byte 251
-	.byte 250
-	.byte 249
-	.byte 248
-	.byte 247
-	.byte 246
-	.byte 245
-	.byte 244
-	.byte 242
-	.byte 241
-	.byte 239
-	.byte 238
-	.byte 236
-	.byte 235
-	.byte 233
-	.byte 231
-	.byte 229
-	.byte 228
-	.byte 226
-	.byte 224
-	.byte 221
-	.byte 219
-	.byte 217
-	.byte 215
-	.byte 213
-	.byte 210
-	.byte 208
-	.byte 205
-	.byte 203
-	.byte 200
-	.byte 198
-	.byte 195
-	.byte 193
-	.byte 190
-	.byte 187
-	.byte 184
-	.byte 182
-	.byte 179
-	.byte 176
-	.byte 173
-	.byte 170
-	.byte 167
-	.byte 164
-	.byte 161
-	.byte 158
-	.byte 155
-	.byte 152
-	.byte 149
-	.byte 146
-	.byte 143
-	.byte 139
-	.byte 136
-	.byte 133
-	.byte 130
-	.byte 127
-	.byte 124
-	.byte 121
-	.byte 118
-	.byte 115
-	.byte 111
-	.byte 108
-	.byte 105
-	.byte 102
-	.byte 99
-	.byte 96
-	.byte 93
-	.byte 90
-	.byte 87
-	.byte 84
-	.byte 81
-	.byte 78
-	.byte 75
-	.byte 72
-	.byte 70
-	.byte 67
-	.byte 64
-	.byte 61
-	.byte 59
-	.byte 56
-	.byte 54
-	.byte 51
-	.byte 49
-	.byte 46
-	.byte 44
-	.byte 41
-	.byte 39
-	.byte 37
-	.byte 35
-	.byte 33
-	.byte 30
-	.byte 28
-	.byte 26
-	.byte 25
-	.byte 23
-	.byte 21
-	.byte 19
-	.byte 18
-	.byte 16
-	.byte 15
-	.byte 13
-	.byte 12
-	.byte 10
-	.byte 9
-	.byte 8
-	.byte 7
-	.byte 6
-	.byte 5
-	.byte 4
-	.byte 3
-	.byte 3
-	.byte 2
-	.byte 1
-	.byte 1
-	.byte 0
-	.byte 0
-	.byte 0
-	.byte 0
-	.byte 0
-	.byte 0
-	.byte 0
-	.byte 0
-	.byte 0
-	.byte 0
-	.byte 0
-	.byte 1
-	.byte 1
-	.byte 2
-	.byte 3
-	.byte 3
-	.byte 4
-	.byte 5
-	.byte 6
-	.byte 7
-	.byte 8
-	.byte 9
-	.byte 10
-	.byte 12
-	.byte 13
-	.byte 15
-	.byte 16
-	.byte 18
-	.byte 19
-	.byte 21
-	.byte 23
-	.byte 25
-	.byte 26
-	.byte 28
-	.byte 30
-	.byte 33
-	.byte 35
-	.byte 37
-	.byte 39
-	.byte 41
-	.byte 44
-	.byte 46
-	.byte 49
-	.byte 51
-	.byte 54
-	.byte 56
-	.byte 59
-	.byte 61
-	.byte 64
-	.byte 67
-	.byte 70
-	.byte 72
-	.byte 75
-	.byte 78
-	.byte 81
-	.byte 84
-	.byte 87
-	.byte 90
-	.byte 93
-	.byte 96
-	.byte 99
-	.byte 102
-	.byte 105
-	.byte 108
-	.byte 111
-	.byte 115
-	.byte 118
-	.byte 121
-	.byte 124
+buffer:

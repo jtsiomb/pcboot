@@ -14,6 +14,7 @@ SECTIONS {
 	 * boot loader
 	 */
 	. = 1M;
+	_main_start = .;
 
 	.startup : { * (.startup); }
 	.text : { * (.text); }
@@ -28,5 +29,6 @@ SECTIONS {
 	}
 	_bss_size = SIZEOF(.bss);
 
+	_main_size = . - _main_start;
 	_mem_start = .;
 }

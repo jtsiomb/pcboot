@@ -25,3 +25,375 @@
 	mov _bss_size, %ecx
 	shr $4, %ecx
 	rep stosl
+
+
+logohack:
+	# copy palette
+	mov $logo_pal, %esi
+	xor %cl, %cl
+
+0:	xor %eax, %eax
+	mov $0x3c8, %dx
+	movb %cl, %al
+	outb %al, %dx
+	inc %dx
+	# red
+	movb (%esi), %al
+	inc %esi
+	shr $2, %al
+	outb %al, %dx
+	# green
+	movb (%esi), %al
+	inc %esi
+	shr $2, %al
+	outb %al, %dx
+	# blue
+	movb (%esi), %al
+	inc %esi
+	shr $2, %al
+	outb %al, %dx
+	add $1, %cl
+	jnc 0b
+
+	# copy pixels
+	mov $sintab, %ebp
+	mov $logo_pix, %esi
+frameloop:
+	mov $0xa0000, %edi
+	movl $0, yval
+yloop:
+	movl $0, xval
+xloop:
+	# calc src scanline address -> ebx
+	xor %ecx, %ecx
+	mov yval, %ebx
+	shl $2, %ebx
+	add frameno, %ebx
+	and $0xff, %ebx
+	mov (%ebp, %ebx), %cl
+	shr $5, %ecx
+
+	mov yval, %eax
+	add %ecx, %eax
+	# bounds check
+	cmp $200, %eax
+	jl 0f
+	mov $199, %eax
+
+0:	mov %eax, %ebx
+	shl $8, %eax
+	shl $6, %ebx
+	add %eax, %ebx
+
+	# calc src x offset -> eax
+	xor %ecx, %ecx
+	mov xval, %eax
+	shl $2, %eax
+	add frameno, %eax
+	and $0xff, %eax
+	mov (%ebp, %eax), %cl
+	shr $5, %ecx
+
+	mov xval, %eax
+	add %ecx, %eax
+	# bounds check
+	cmp $320, %eax
+	jl 0f
+	mov $319, %eax
+
+0:	add %eax, %ebx
+	mov (%ebx, %esi), %al
+
+	mov %al, (%edi)
+	inc %edi
+
+	incl xval
+	cmpl $320, xval
+	jnz xloop
+
+	incl yval
+	cmpl $200, yval
+	jnz yloop
+
+	incl frameno
+
+	# wait vsync
+	mov $0x3da, %dx
+0:	in %dx, %al
+	and $8, %al
+	jnz 0b
+0:	in %dx, %al
+	and $8, %al
+	jz 0b
+	jmp frameloop
+
+xval: .long 0
+yval: .long 0
+frameno: .long 0
+
+numbuf: .space 16
+
+logo_pal:
+	.incbin "logo.pal"
+
+	.align 16
+logo_pix:
+	.incbin "logo.raw"
+
+sintab:
+	.byte 127
+	.byte 130
+	.byte 133
+	.byte 136
+	.byte 139
+	.byte 143
+	.byte 146
+	.byte 149
+	.byte 152
+	.byte 155
+	.byte 158
+	.byte 161
+	.byte 164
+	.byte 167
+	.byte 170
+	.byte 173
+	.byte 176
+	.byte 179
+	.byte 182
+	.byte 184
+	.byte 187
+	.byte 190
+	.byte 193
+	.byte 195
+	.byte 198
+	.byte 200
+	.byte 203
+	.byte 205
+	.byte 208
+	.byte 210
+	.byte 213
+	.byte 215
+	.byte 217
+	.byte 219
+	.byte 221
+	.byte 224
+	.byte 226
+	.byte 228
+	.byte 229
+	.byte 231
+	.byte 233
+	.byte 235
+	.byte 236
+	.byte 238
+	.byte 239
+	.byte 241
+	.byte 242
+	.byte 244
+	.byte 245
+	.byte 246
+	.byte 247
+	.byte 248
+	.byte 249
+	.byte 250
+	.byte 251
+	.byte 251
+	.byte 252
+	.byte 253
+	.byte 253
+	.byte 254
+	.byte 254
+	.byte 254
+	.byte 254
+	.byte 254
+	.byte 255
+	.byte 254
+	.byte 254
+	.byte 254
+	.byte 254
+	.byte 254
+	.byte 253
+	.byte 253
+	.byte 252
+	.byte 251
+	.byte 251
+	.byte 250
+	.byte 249
+	.byte 248
+	.byte 247
+	.byte 246
+	.byte 245
+	.byte 244
+	.byte 242
+	.byte 241
+	.byte 239
+	.byte 238
+	.byte 236
+	.byte 235
+	.byte 233
+	.byte 231
+	.byte 229
+	.byte 228
+	.byte 226
+	.byte 224
+	.byte 221
+	.byte 219
+	.byte 217
+	.byte 215
+	.byte 213
+	.byte 210
+	.byte 208
+	.byte 205
+	.byte 203
+	.byte 200
+	.byte 198
+	.byte 195
+	.byte 193
+	.byte 190
+	.byte 187
+	.byte 184
+	.byte 182
+	.byte 179
+	.byte 176
+	.byte 173
+	.byte 170
+	.byte 167
+	.byte 164
+	.byte 161
+	.byte 158
+	.byte 155
+	.byte 152
+	.byte 149
+	.byte 146
+	.byte 143
+	.byte 139
+	.byte 136
+	.byte 133
+	.byte 130
+	.byte 127
+	.byte 124
+	.byte 121
+	.byte 118
+	.byte 115
+	.byte 111
+	.byte 108
+	.byte 105
+	.byte 102
+	.byte 99
+	.byte 96
+	.byte 93
+	.byte 90
+	.byte 87
+	.byte 84
+	.byte 81
+	.byte 78
+	.byte 75
+	.byte 72
+	.byte 70
+	.byte 67
+	.byte 64
+	.byte 61
+	.byte 59
+	.byte 56
+	.byte 54
+	.byte 51
+	.byte 49
+	.byte 46
+	.byte 44
+	.byte 41
+	.byte 39
+	.byte 37
+	.byte 35
+	.byte 33
+	.byte 30
+	.byte 28
+	.byte 26
+	.byte 25
+	.byte 23
+	.byte 21
+	.byte 19
+	.byte 18
+	.byte 16
+	.byte 15
+	.byte 13
+	.byte 12
+	.byte 10
+	.byte 9
+	.byte 8
+	.byte 7
+	.byte 6
+	.byte 5
+	.byte 4
+	.byte 3
+	.byte 3
+	.byte 2
+	.byte 1
+	.byte 1
+	.byte 0
+	.byte 0
+	.byte 0
+	.byte 0
+	.byte 0
+	.byte 0
+	.byte 0
+	.byte 0
+	.byte 0
+	.byte 0
+	.byte 0
+	.byte 1
+	.byte 1
+	.byte 2
+	.byte 3
+	.byte 3
+	.byte 4
+	.byte 5
+	.byte 6
+	.byte 7
+	.byte 8
+	.byte 9
+	.byte 10
+	.byte 12
+	.byte 13
+	.byte 15
+	.byte 16
+	.byte 18
+	.byte 19
+	.byte 21
+	.byte 23
+	.byte 25
+	.byte 26
+	.byte 28
+	.byte 30
+	.byte 33
+	.byte 35
+	.byte 37
+	.byte 39
+	.byte 41
+	.byte 44
+	.byte 46
+	.byte 49
+	.byte 51
+	.byte 54
+	.byte 56
+	.byte 59
+	.byte 61
+	.byte 64
+	.byte 67
+	.byte 70
+	.byte 72
+	.byte 75
+	.byte 78
+	.byte 81
+	.byte 84
+	.byte 87
+	.byte 90
+	.byte 93
+	.byte 96
+	.byte 99
+	.byte 102
+	.byte 105
+	.byte 108
+	.byte 111
+	.byte 115
+	.byte 118
+	.byte 121
+	.byte 124

@@ -65,15 +65,16 @@ boot:
 	call read_sectors
 	jmp boot2_addr
 
-	.set ARG_NSECT, 6
-	.set ARG_SIDX, 4
-
 loading_msg: .asciz "\nLoad "
 driveno_msg: .asciz "Drv:"
 
+	.global sect_per_track
 sect_per_track: .short 18
+	.global num_cylinders
 num_cylinders: .short 80
+	.global num_heads
 num_heads: .short 2
+	.global heads_mask
 heads_mask: .byte 1
 
 get_drive_chs:
@@ -117,6 +118,10 @@ ok:	xor %eax, %eax
 	mov %cx, %ax
 	call print_num
 	ret
+
+
+	.set ARG_NSECT, 6
+	.set ARG_SIDX, 4
 
 # read_sectors(first, num)
 read_sectors:
