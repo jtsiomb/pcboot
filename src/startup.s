@@ -15,16 +15,19 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 	.code32
-	.section .startup
+	.section .startup,"ax"
 
 	.extern _bss_start
 	.extern _bss_end
 
+	# zero the BSS section
 	xor %eax, %eax
 	mov _bss_start, %edi
 	mov _bss_size, %ecx
+	jz skip_bss_zero
 	shr $4, %ecx
 	rep stosl
+skip_bss_zero:
 
 
 logohack:
@@ -130,8 +133,6 @@ xloop:
 xval: .long 0
 yval: .long 0
 frameno: .long 0
-
-numbuf: .space 16
 
 logo_pal:
 	.incbin "logo.pal"

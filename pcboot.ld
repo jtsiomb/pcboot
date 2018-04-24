@@ -7,7 +7,11 @@ SECTIONS {
 	.boot : { * (.boot); }
 
 	/* second stage boot loader */
-	.boot2 : { * (.boot2); }
+	.boot2 : {
+		* (.boot2);
+		/* pad the boot loader to the next sector boundary */
+		. = ALIGN(512);
+	}
 	_boot2_size = SIZEOF(.boot2);
 
 	/* main program will be loaded at 1MB by the second stage

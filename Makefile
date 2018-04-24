@@ -20,12 +20,20 @@ ifneq ($(shell uname -m), i386)
 	ldarch = -m elf_i386
 endif
 
-floppy.img: $(bin)
+floppy.img: boot.img
 	dd if=/dev/zero of=$@ bs=512 count=2880
 	dd if=$< of=$@ conv=notrunc
 
+boot.img: bootldr.bin $(bin)
+	cat bootldr.bin $(bin) >$@
+
+# bootldr.bin will contain only .boot and .boot2
+bootldr.bin: $(elf)
+	objcopy -O binary -j '.boot*' $< $@
+
+# the main binary will contain every section *except* .boot and .boot2
 $(bin): $(elf)
-	objcopy -O binary $< $@
+	objcopy -O binary -R '.boot*' $< $@
 
 $(elf): $(obj)
 	$(LD) -o $@ $(obj) -Map link.map $(LDFLAGS)
@@ -37,11 +45,20 @@ $(elf): $(obj)
 
 .PHONY: clean
 clean:
-	rm -f $(obj) $(bin) floppy.img
+	rm -f $(obj) $(bin) boot.img floppy.img link.map
 
 .PHONY: cleandep
 cleandep:
 	rm -f $(dep)
+
+.PHONY: disasm
+disasm: bootldr.disasm $(elf).disasm
+
+bootldr.disasm: $(elf)
+	objdump -d $< -j .boot -j .boot2 -m i8086 >$@
+
+$(elf).disasm: $(elf)
+	objdump -d $< -j .startup -j .text -m i386 >$@
 
 .PHONY: run
 run: $(bin)

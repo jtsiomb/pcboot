@@ -16,7 +16,7 @@
 
 # this is the second-stage boot loader
 	.code16
-	.section .boot2,"a"
+	.section .boot2,"ax"
 
 	.set main_load_addr, 0x100000
 
@@ -230,15 +230,15 @@ ldloop:
 	mov $10, %ax
 	call putchar
 
-	# DBG
-	hlt
-
 	ret
 
 rdtrk_msg: .asciz "Reading track: "
 rdcyl_msg: .asciz " - cyl: "
 rdhead_msg: .asciz " head: "
 rdsect_msg: .asciz " start sect: "
+rdlast_msg: .asciz " ... "
+rdok_msg: .asciz "OK\n"
+rdfail_msg: .asciz "failed\n"
 
 read_retries: .short 0
 
@@ -292,8 +292,8 @@ read_try:
 	call putstr
 	mov trk_sect, %eax
 	call print_num
-	mov $10, %al
-	call putchar
+	mov $rdlast_msg, %esi
+	call putstr
 
 	# start sector (1-based) in cl[0, 5]
 	mov trk_sect, %al
@@ -320,11 +320,13 @@ read_try:
 	jmp read_try
 
 read_fail:
+	mov $rdfail_msg, %esi
+	call putstr
 	jmp abort_read
 
 read_ok:
-	mov $35, %ax
-	call putchar
+	mov $rdok_msg, %esi
+	call putstr
 
 	# reset es to 0 before returning
 	xor %ax, %ax

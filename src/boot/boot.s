@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 	.code16
-	.section .boot,"a"
+	.section .boot,"ax"
 
 	.set stack_top, 0x7be0
 	.set read_retries, 0x7be8
