@@ -196,10 +196,11 @@ ldloop:
 	push %ecx
 	call read_track
 
-	mov buffer, %eax
-	call print_num
-	mov $10, %al
-	call putchar
+	# debug: print the first 32bits of the track
+	#mov buffer, %eax
+	#call print_num
+	#mov $10, %al
+	#call putchar
 
 	# copy to high memory
 	mov $buffer, %esi
