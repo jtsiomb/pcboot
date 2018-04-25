@@ -6,12 +6,14 @@ elf = test
 bin = test.bin
 
 warn = -pedantic -Wall
+#opt = -O2
 dbg = -g
 inc = -Isrc -Isrc/libc
+gccopt = -fno-pic -ffreestanding -nostdinc -fno-builtin
 
-CFLAGS = $(ccarch) -march=i386 $(warn) $(dbg) -nostdinc -fno-builtin $(inc) $(def)
+CFLAGS = $(ccarch) -march=i386 $(warn) $(opt) $(dbg) $(gccopt) $(inc) $(def)
 ASFLAGS = $(asarch) -march=i386 $(dbg) -nostdinc -fno-builtin $(inc)
-LDFLAGS = $(ldarch) -T pcboot.ld -print-gc-sections
+LDFLAGS = $(ldarch) -nostdlib -T pcboot.ld -print-gc-sections
 
 
 ifneq ($(shell uname -m), i386)
@@ -60,6 +62,16 @@ bootldr.disasm: $(elf)
 $(elf).disasm: $(elf)
 	objdump -d $< -j .startup -j .text -m i386 >$@
 
+$(elf).sym: $(elf)
+	objcopy --only-keep-debug $< $@
+
 .PHONY: run
 run: $(bin)
 	qemu-system-i386 -fda floppy.img -serial file:serial.log
+
+.PHONY: debug
+debug: $(bin) $(elf).sym
+	qemu-system-i386 -fda floppy.img -serial file:serial.log -s -S
+
+.PHONY: sym
+sym: $(elf).sym

@@ -37,8 +37,8 @@
 	# load the whole program into memory starting at 1MB
 	call load_main
 
-	mov $0x13, %ax
-	int $0x10
+	#mov $0x13, %ax
+	#int $0x10
 
 	# load initial GDT
 	lgdt (gdt_lim)
@@ -349,14 +349,15 @@ abort_read:
 	jmp 0b
 
 
-
 	# better print routines, since we're not constrainted by the 512b of
 	# the boot sector.
+	.global cursor_x
+	.global cursor_y
 cursor_x: .long 0
 cursor_y: .long 0
 
 putchar:
-	pusha
+	pushal
 	call ser_putchar
 
 	cmp $10, %al
@@ -382,7 +383,7 @@ putchar:
 	jnz 1f
 	call video_newline
 
-1:	popa
+1:	popal
 	ret
 	
 	# expects string pointer in esi
@@ -398,7 +399,7 @@ putstr:
 	# expects number in eax
 print_num:
 	# save registers
-	pusha
+	pushal
 
 	mov $numbuf + 16, %esi
 	movb $0, (%esi)
@@ -415,7 +416,7 @@ convloop:
 	call putstr
 
 	# restore regs
-	popa
+	popal
 	ret
 
 
@@ -429,7 +430,7 @@ video_newline:
 0:	ret
 
 scrollup:
-	pusha
+	pushal
 	# move 80 * 24 lines from b80a0 -> b8000
 	mov $0xb8000, %edi
 	mov $0xb80a0, %esi
@@ -440,7 +441,7 @@ scrollup:
 	xor %eax, %eax
 	mov $40, %ecx
 	addr32 rep stosl
-	popa
+	popal
 	ret
 
 clearscr:

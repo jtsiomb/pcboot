@@ -4,3 +4,10 @@
 *.bin
 test
 *.map
+*.sym
+*.disasm
+*.img
+*.log
+*.tga
+*.png
+

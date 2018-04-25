@@ -19,6 +19,7 @@
 
 	.extern _bss_start
 	.extern _bss_end
+	.extern pcboot_main
 
 	# zero the BSS section
 	xor %eax, %eax
@@ -29,7 +30,13 @@
 	rep stosl
 skip_bss_zero:
 
+	call pcboot_main
+	# pcboot_main never returns
+0:	cli
+	hlt
+	jmp 0b
 
+	.global logohack
 logohack:
 	# copy palette
 	mov $logo_pal, %esi
