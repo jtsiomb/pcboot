@@ -1,10 +1,6 @@
 pcboot
 ======
 
-This project is still in the early stages of initial hacking, so many of the
-following are not implemented yet, but rather the concepts that will be fleshed
-out in the future.
-
 pcboot is a minimal 32 bit protected mode kernel, which can be used to make
 bootable PC demos or games. It's not designed as a regular standalone operating
 system kernel, and cannot be used as such. The intend is to link it with your
