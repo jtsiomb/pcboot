@@ -7,6 +7,11 @@
 #define disable_intr() asm volatile("cli")
 #define halt_cpu() asm volatile("hlt")
 
+#define CALLER_EIP(eip) \
+	asm volatile( \
+		"mov (%%esp), %0\n\t" \
+		: "=a" ((uint32_t)eip))
+
 static inline uint8_t inb(uint16_t port)
 {
 	uint8_t res;

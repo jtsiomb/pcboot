@@ -1,6 +1,7 @@
 csrc = $(wildcard src/*.c) $(wildcard src/libc/*.c)
 ssrc = $(wildcard src/*.s) $(wildcard src/libc/*.s) $(wildcard src/boot/*.s)
-obj = $(csrc:.c=.o) $(ssrc:.s=.o)
+Ssrc = $(wildcard src/*.S)
+obj = $(csrc:.c=.o) $(ssrc:.s=.o) $(Ssrc:.S=.o)
 dep = $(obj:.o=.d)
 elf = test
 bin = test.bin
@@ -39,6 +40,9 @@ $(bin): $(elf)
 
 $(elf): $(obj)
 	$(LD) -o $@ $(obj) -Map link.map $(LDFLAGS)
+
+%.o: %.S
+	$(CC) -o $@ $(CFLAGS) -c $<
 
 -include $(dep)
 
