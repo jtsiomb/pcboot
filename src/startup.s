@@ -23,8 +23,9 @@
 
 	# zero the BSS section
 	xor %eax, %eax
-	mov _bss_start, %edi
-	mov _bss_size, %ecx
+	mov $_bss_start, %edi
+	mov $_bss_size, %ecx
+	cmp $0, %ecx
 	jz skip_bss_zero
 	shr $4, %ecx
 	rep stosl
