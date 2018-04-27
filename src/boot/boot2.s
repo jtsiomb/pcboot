@@ -584,6 +584,12 @@ int86:
 	sidt (saved_idtr)
 	lidt (rmidt)
 
+	# modify the int instruction do this here before the
+	# cs-load jumps, to let them flush the instruction cache
+	mov $int_op, %ebx
+	movb 8(%ebp), %al
+	movb %al, 1(%ebx)
+
 	# long jump to load code selector for 16bit code (6)
 	ljmp $0x30,$0f
 0:
@@ -601,15 +607,10 @@ int86:
 	mov %ax, %ss
 	nop
 
-	# modify the int instruction
-	mov $int_op, %ebx
-	movb 4(%ebp), %al
-	movb %al, 1(%ebx)
-
 	# load registers from the int86regs struct
 	mov %esp, saved_esp
 	mov %ebp, saved_ebp
-	mov 8(%ebp), %esp
+	mov 12(%ebp), %esp
 	popal
 	mov saved_esp, %esp
 
@@ -617,8 +618,9 @@ int86:
 int_op:	int $0
 
 	mov saved_ebp, %ebp
-	mov 8(%ebp), %esp
-	add $32, %esp
+	mov 12(%ebp), %esp
+	add $34, %esp
+	pushfw
 	pushal
 	mov saved_esp, %esp
 
