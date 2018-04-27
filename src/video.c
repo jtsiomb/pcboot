@@ -15,51 +15,16 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-#include "segm.h"
-#include "intr.h"
-#include "keyb.h"
-#include "timer.h"
-#include "contty.h"
 #include "video.h"
+#include <string.h>
+#include "int86.h"
 
 
-void logohack(void);
-
-void pcboot_main(void)
+void set_vga_mode(int mode)
 {
-	init_segm();
-	init_intr();
-	kb_init();
-	con_init();
+	struct int86regs regs;
 
-	/* initialize the timer */
-	init_timer();
-
-	enable_intr();
-
-	printf("PCBoot kernel initialized\n");
-
-	for(;;) {
-		int c;
-
-		halt_cpu();
-		while((c = kb_getkey()) >= 0) {
-			if(c >= KB_F1 && c <= KB_F12) {
-				set_vga_mode(0x13);
-				logohack();
-				set_vga_mode(3);
-			}
-			if(isprint(c)) {
-				printf("key: %d '%c'       \n", c, (char)c);
-			} else {
-				printf("key: %d            \n", c);
-			}
-		}
-		if((nticks % 250) == 0) {
-			printf("ticks: %ld\r", nticks);
-		}
-	}
+	memset(&regs, 0, sizeof regs);
+	regs.eax = mode;
+	int86(0x10, &regs);
 }

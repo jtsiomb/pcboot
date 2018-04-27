@@ -20,6 +20,8 @@
 	.extern _bss_start
 	.extern _bss_end
 	.extern pcboot_main
+	.extern wait_vsync
+	.extern kb_getkey
 
 	# move the stack to the top of the conventional memory
 	movl $0x80000, %esp
@@ -42,6 +44,8 @@ skip_bss_zero:
 
 	.global logohack
 logohack:
+	pusha
+
 	# copy palette
 	mov $logo_pal, %esi
 	xor %cl, %cl
@@ -131,15 +135,17 @@ xloop:
 
 	incl frameno
 
-	# wait vsync
-	mov $0x3da, %dx
-0:	in %dx, %al
-	and $8, %al
-	jnz 0b
-0:	in %dx, %al
-	and $8, %al
-	jz 0b
+	call wait_vsync
+
+	# check for escape keypress
+	call kb_getkey
+	cmp $27, %eax
+	jz 0f
+
 	jmp frameloop
+
+0:	popa
+	ret
 
 xval: .long 0
 yval: .long 0
