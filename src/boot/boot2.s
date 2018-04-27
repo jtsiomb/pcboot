@@ -554,10 +554,9 @@ kbc_wait_write:
 numbuf: .space 16
 
 
-# this is not boot loader code. It's called later on by the main
-# kernel code in 32bit protected mode. It's placed here because
-# it needs to be in base memory as it returns and runs in real mode.
-
+# this is not boot loader code. It's called later on by the main kernel
+# code in 32bit protected mode. It's placed here because it needs to be
+# located in base memory as it returns and runs in real mode.
 	.code32
 	.align 4
 	# place to save the protected mode IDTR pseudo-descriptor
@@ -571,9 +570,14 @@ idtaddr:.long 0
 rmidt:	.short 0x3ff
 	.long 0
 
-	# drop back to unreal mode to set video mode
-	.global set_mode13h
-set_mode13h:
+saved_esp: .long 0
+saved_ebp: .long 0
+
+	# drop back to unreal mode to call 16bit interrupt
+	.global int86
+int86:
+	push %ebp
+	mov %esp, %ebp
 	pushal
 	cli
 	# save protected mode IDTR and replace it with the real mode vectors
@@ -597,9 +601,26 @@ set_mode13h:
 	mov %ax, %ss
 	nop
 
-	# switch video mode by calling the video bios
-	mov $0x13, %ax
-	int $0x10
+	# modify the int instruction
+	mov $int_op, %ebx
+	movb 4(%ebp), %al
+	movb %al, 1(%ebx)
+
+	# load registers from the int86regs struct
+	mov %esp, saved_esp
+	mov %ebp, saved_ebp
+	mov 8(%ebp), %esp
+	popal
+	mov saved_esp, %esp
+
+	# call 16bit interrupt
+int_op:	int $0
+
+	mov saved_ebp, %ebp
+	mov 8(%ebp), %esp
+	add $32, %esp
+	pushal
+	mov saved_esp, %esp
 
 	# re-enable protection
 	mov %cr0, %eax
@@ -620,6 +641,7 @@ set_mode13h:
 	lidt (saved_idtr)
 	sti
 	popal
+	pop %ebp
 	ret
 
 

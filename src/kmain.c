@@ -16,14 +16,24 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include <stdio.h>
+#include <string.h>
 #include <ctype.h>
 #include "segm.h"
 #include "intr.h"
 #include "keyb.h"
 #include "timer.h"
 #include "contty.h"
+#include "int86.h"
 
-void set_mode13h(void);
+static void set_mode13h(void)
+{
+	struct int86regs regs;
+
+	memset(&regs, 0, sizeof regs);
+	regs.eax = 0x13;
+	int86(0x10, &regs);
+}
+
 void logohack(void);
 
 void pcboot_main(void)
