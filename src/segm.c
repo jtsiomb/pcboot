@@ -43,6 +43,7 @@ enum {TYPE_DATA, TYPE_CODE};
 #define TSS_TYPE_BITS	(9 << 8)
 
 static void segm_desc(desc_t *desc, uint32_t base, uint32_t limit, int dpl, int type);
+static void segm_desc16(desc_t *desc, uint32_t base, uint32_t limit, int dpl, int type);
 static void task_desc(desc_t *desc, uint32_t base, uint32_t limit, int dpl);
 
 /* these functions are implemented in segm-asm.S */
@@ -52,7 +53,7 @@ void set_task_reg(uint16_t tss_selector);
 
 
 /* our global descriptor table */
-static desc_t gdt[6] __attribute__((aligned(8)));
+static desc_t gdt[NUM_SEGMENTS] __attribute__((aligned(8)));
 
 
 void init_segm(void)
@@ -62,6 +63,7 @@ void init_segm(void)
 	segm_desc(gdt + SEGM_KDATA, 0, 0xffffffff, 0, TYPE_DATA);
 	segm_desc(gdt + SEGM_UCODE, 0, 0xffffffff, 3, TYPE_CODE);
 	segm_desc(gdt + SEGM_UDATA, 0, 0xffffffff, 3, TYPE_DATA);
+	segm_desc16(gdt + SEGM_CODE16, 0, 0xffff, 0, TYPE_CODE);
 
 	set_gdt((uint32_t)gdt, sizeof gdt - 1);
 
@@ -96,6 +98,22 @@ static void segm_desc(desc_t *desc, uint32_t base, uint32_t limit, int dpl, int 
 	 * base, and the granularity and deafult/big flags in bits 23 and 22 resp.
 	 */
 	desc->d[3] = ((limit >> 16) & 0xf) | ((base >> 16) & 0xff00) | BIT_GRAN | BIT_BIG;
+}
+
+static void segm_desc16(desc_t *desc, uint32_t base, uint32_t limit, int dpl, int type)
+{
+	desc->d[0] = limit & 0xffff; /* low order 16bits of limit */
+	desc->d[1] = base & 0xffff;  /* low order 16bits of base */
+
+	/* third 16bit part contains the last 8 bits of base, the 2 priviledge
+	 * level bits starting on bit 13, present flag on bit 15, and type bits
+	 * starting from bit 8
+	 */
+	desc->d[2] = ((base >> 16) & 0xff) | ((dpl & 3) << 13) | BIT_PRESENT |
+		BIT_NOSYS | (type == TYPE_DATA ? BIT_WR : (BIT_RD | BIT_CODE));
+
+	/* 16bit descriptors have the upper word 0 */
+	desc->d[3] = 0;
 }
 
 static void task_desc(desc_t *desc, uint32_t base, uint32_t limit, int dpl)

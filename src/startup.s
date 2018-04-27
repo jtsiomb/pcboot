@@ -21,6 +21,9 @@
 	.extern _bss_end
 	.extern pcboot_main
 
+	# move the stack to the top of the conventional memory
+	movl $0x80000, %esp
+
 	# zero the BSS section
 	xor %eax, %eax
 	mov $_bss_start, %edi

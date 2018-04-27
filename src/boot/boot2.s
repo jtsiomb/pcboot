@@ -553,5 +553,76 @@ kbc_wait_write:
 
 numbuf: .space 16
 
+
+# this is not boot loader code. It's called later on by the main
+# kernel code in 32bit protected mode. It's placed here because
+# it needs to be in base memory as it returns and runs in real mode.
+
+	.code32
+	.align 4
+	# place to save the protected mode IDTR pseudo-descriptor
+	# with sidt, so that it can be restored before returning
+	.short 0
+saved_idtr:
+idtlim:	.short 0
+idtaddr:.long 0
+	# real mode IDTR pseudo-descriptor pointing to the IVT at addr 0
+	.short 0
+rmidt:	.short 0x3ff
+	.long 0
+
+	# drop back to unreal mode to set video mode
+	.global set_mode13h
+set_mode13h:
+	pushal
+	cli
+	# save protected mode IDTR and replace it with the real mode vectors
+	sidt (saved_idtr)
+	lidt (rmidt)
+
+	# long jump to load code selector for 16bit code (6)
+	ljmp $0x30,$0f
+0:
+	.code16
+	# disable protection
+	mov %cr0, %eax
+	and $0xfffe, %ax
+	mov %eax, %cr0
+	# load cs <- 0
+	ljmp $0,$0f
+0:	# zero data segments
+	xor %ax, %ax
+	mov %ax, %ds
+	mov %ax, %es
+	mov %ax, %ss
+	nop
+
+	# switch video mode by calling the video bios
+	mov $0x13, %ax
+	int $0x10
+
+	# re-enable protection
+	mov %cr0, %eax
+	or $1, %ax
+	mov %eax, %cr0
+	# long jump to load code selector for 32bit code (1)
+	ljmp $0x8,$0f
+0:
+	.code32
+	# set data selector (2) to all segment regs
+	mov $0x10, %ax
+	mov %ax, %ds
+	mov %ax, %es
+	mov %ax, %ss
+	nop
+
+	# restore 32bit interrupt descriptor table
+	lidt (saved_idtr)
+	sti
+	popal
+	ret
+
+
+	# buffer used by the track loader ... to load tracks.
 	.align 16
 buffer:

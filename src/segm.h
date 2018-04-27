@@ -18,19 +18,22 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef SEGM_H_
 #define SEGM_H_
 
-#define SEGM_KCODE	1
-#define SEGM_KDATA	2
-#define SEGM_UCODE	3
-#define SEGM_UDATA	4
-#define SEGM_TASK	5
+enum {
+	SEGM_KCODE = 1,
+	SEGM_KDATA = 2,
+	SEGM_UCODE,
+	SEGM_UDATA,
+	SEGM_TASK,
+	SEGM_CODE16,
 
-#ifndef ASM
+	NUM_SEGMENTS
+};
+
 void init_segm(void);
 
 uint16_t selector(int idx, int rpl);
 
 void set_tss(uint32_t addr);
-#endif	/* ASM */
 
 
 #endif	/* SEGM_H_ */
