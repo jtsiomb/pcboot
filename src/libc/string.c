@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include <string.h>
 
+/*
 void memset(void *s, int c, size_t n)
 {
 	char *ptr = s;
@@ -24,10 +25,12 @@ void memset(void *s, int c, size_t n)
 		*ptr++ = c;
 	}
 }
+*/
 
 /* Does the same thing as memset only with 16bit values.
  * n in this case is the number of values, not the number of bytes.
  */
+/*
 void memset16(void *s, int c, size_t n)
 {
 	int16_t *ptr = s;
@@ -35,7 +38,8 @@ void memset16(void *s, int c, size_t n)
 		*ptr++ = c;
 	}
 }
-
+*/
+/*
 void *memcpy(void *dest, const void *src, size_t n)
 {
 	char *dptr = dest;
@@ -46,6 +50,7 @@ void *memcpy(void *dest, const void *src, size_t n)
 	}
 	return dest;
 }
+*/
 
 void *memmove(void *dest, const void *src, size_t n)
 {
