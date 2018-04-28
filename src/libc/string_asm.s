@@ -34,6 +34,7 @@ memset:
 
 	mov %edi, %edx
 	and $3, %edx
+	jz msmain
 	jmp *mspre_tab(,%edx,4)
 
 mspre_tab: .long msmain, mspre1, mspre2, mspre3
@@ -84,6 +85,7 @@ memset16:
 
 	mov %edi, %edx
 	and $3, %edx
+	jz ms16main
 	jmp *ms16pre_tab(,%edx,4)
 
 ms16pre_tab: .long ms16main, ms16pre1, ms16pre2, ms16pre3
@@ -145,27 +147,12 @@ memcpy:
 	cmp $0, %ecx
 	jz mcdone
 
-	mov %edi, %edx
-	and $3, %edx
-	jmp *mcpre_tab(,%edx,4)
-
-mcpre_tab: .long mcmain, mcpre1, mcpre2, mcpre3
-mcpre1:	movsw
-	dec %ecx
-mcpre2:	movsw
-	dec %ecx
-mcpre3:	movsw
-	dec %ecx
-	jz mcdone
-
-mcmain:
-	push %ecx
+	mov %ecx, %edx
 	shr $2, %ecx
 	rep movsl
-	pop %ecx
 
-	and $3, %ecx
-	jmp *mcpost_tab(,%ecx,4)
+	and $3, %edx
+	jmp *mcpost_tab(,%edx,4)
 
 mcpost_tab: .long mcdone, mcpost1, mcpost2, mcpost3
 mcpost3:movsb
