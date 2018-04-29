@@ -557,19 +557,61 @@ kbc_wait_write:
 numbuf: .space 16
 
 
-	# sets the carry flag on failure
 detect_memory:
+	mov $memdet_e820_msg, %esi
+	call putstr
+	call detect_mem_e820
+	jnc memdet_done
+	mov $rdfail_msg, %esi
+	call putstr
+
+	mov $memdet_e801_msg, %esi
+	call putstr
+	call detect_mem_e801
+	jnc memdet_done
+	mov $rdfail_msg, %esi
+	call putstr
+
+	mov $memdet_88_msg, %esi
+	call putstr
+	call detect_mem_88
+	jnc memdet_done
+	mov $rdfail_msg, %esi
+	call putstr
+
+	# just panic...
+	mov $memdet_fail_msg, %esi
+	call putstr
+0:	hlt
+	jmp 0b
+
+memdet_done:
+	mov $rdok_msg, %esi
+	call putstr
+	ret
+
+memdet_fail_msg: .ascii "Failed to detect available memory!\n"
+		 .ascii "Please file a bug report: https://github.com/jtsiomb/pcboot/issues\n"
+		 .asciz " or contact me through email: nuclear@member.fsf.org\n"
+memdet_e820_msg: .asciz "Detecting RAM (BIOS 15h/0xe820)... "
+memdet_e801_msg: .asciz "Detecting RAM (BIOS 15h/0xe801)... " 
+memdet_88_msg:	 .asciz "Detecting RAM (BIOS 15h/0x88, max 64mb)... "
+
+	# detect extended memory using BIOS call 15h/e820
+detect_mem_e820:
+	movl $0, boot_mem_map_size
+
 	mov $buffer, %edi
 	xor %ebx, %ebx
 	mov $0x534d4150, %edx
 
-memdet_looptop:
+e820_looptop:
 	mov $0xe820, %eax
 	mov $24, %ecx
 	int $0x15
-	jc memdet_fail
+	jc e820_fail
 	cmp $0x534d4150, %eax
-	jnz memdet_fail
+	jnz e820_fail
 
 	mov buffer, %eax
 	mov $boot_mem_map, %esi
@@ -579,47 +621,111 @@ memdet_looptop:
 
 	# only care for type 1 (usable ram), otherwise ignore
 	cmpl $1, 16(%edi)
-	jnz memdet_skip
+	jnz e820_skip
 
 	# skip areas with 0 size (also clamp size to 4gb)
 	# test high 32bits
 	cmpl $0, 12(%edi)
-	jz memdet_highzero
+	jz e820_highzero
 	# high part is non-zero, make low part ffffffff
 	xor %eax, %eax
 	not %eax
 	jmp 0f
 
-memdet_highzero:
+e820_highzero:
 	# if both high and low parts are zero, ignore
 	mov 8(%edi), %eax
 	cmpl $0, %eax
-	jz memdet_skip
+	jz e820_skip
 
 0:	mov %eax, 4(%esi,%ebp,8)
 	incl boot_mem_map_size
 
-memdet_skip:
+e820_skip:
 	# terminate the loop if ebx was reset to 0
 	cmp $0, %ebx
-	jz memdet_done
-	jmp memdet_looptop
+	jz e820_done
+	jmp e820_looptop
 
-memdet_done:
+e820_done:
+	clc
 	ret
 
-memdet_fail:
+e820_fail:
 	# if size > 0, then it's not a failure, just the end
 	cmpl $0, boot_mem_map_size
-	jnz memdet_done
+	jnz e820_done
 
-	# just panic...
-	mov $memdet_fail_msg, %esi
-	call putstr
-0:	hlt
-	jmp 0b
+	stc
+	ret
 
-memdet_fail_msg: .asciz "Failed to detect available memory!\n"
+
+	# detect extended memory using BIOS call 15h/e801
+detect_mem_e801:
+	mov $boot_mem_map, %esi
+	mov boot_mem_map_size, %ebp
+	movl $0, (%ebp)
+
+	xor %cx, %cx
+	xor %dx, %dx
+	mov $0xe801, %ax
+	int $0x15
+	jc e801_fail
+
+	cmp $0, %cx
+	jnz 0f
+	cmp $0, %ax
+	jz e801_fail
+	mov %ax, %cx
+	mov %bx, %dx
+
+0:	movl $0x100000, (%esi)
+	movzx %cx, %eax
+	# first size is in KB, convert to bytes
+	shl $10, %eax
+	mov %eax, 4(%esi)
+	cmp $0, %dx
+	incl boot_mem_map_size
+	jz e801_done
+	movl $0x1000000, 8(%esi)
+	movzx %dx, %eax
+	# second size is in 64kb blocks, convert to bytes
+	shl $16, %eax
+	mov %eax, 12(%esi)
+	incl boot_mem_map_size
+e801_done:
+	clc
+	ret
+e801_fail:
+	stc
+	ret
+
+detect_mem_88:
+	# reportedly some BIOS implementations fail to clear CF on success
+	clc
+	mov $0x88, %ah
+	int $0x15
+	jc x88_fail
+
+	cmp $0, %ax
+	jz x88_fail
+
+	# ax has size in KB, convert to bytes in eax
+	and $0xffff, %eax
+	shl $10, %eax
+
+	mov $boot_mem_map, %esi
+	movl $0x100000, (%esi)
+	mov %eax, 4(%esi)
+
+	movl $1, boot_mem_map_size
+	clc
+	ret
+
+x88_fail:
+	stc
+	ret
+
 
 	.global boot_mem_map_size
 boot_mem_map_size: .long 0
