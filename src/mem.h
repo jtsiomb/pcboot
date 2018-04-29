@@ -18,6 +18,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef MEM_H_
 #define MEM_H_
 
+#define ADDR_TO_PAGE(x)			((uint32_t)(x) >> 12)
+#define PAGE_TO_ADDR(x)			((uint32_t)(x) << 12)
+
 void init_mem(void);
+
+int alloc_ppage(void);
+void free_ppage(int pg);
+
+int alloc_ppage_range(int start, int size);
+int free_ppage_range(int start, int size);
 
 #endif	/* MEM_H_ */
