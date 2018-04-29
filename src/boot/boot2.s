@@ -15,6 +15,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # this is the second-stage boot loader
+# plus some other code that needs to run below 1mb (int86 implementation).
+
 	.code16
 	.section .boot2,"ax"
 
