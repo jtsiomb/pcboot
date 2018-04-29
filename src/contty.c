@@ -175,7 +175,7 @@ static void scroll(void)
 
 	/* clear the next line that will be revealed by scrolling */
 	new_line = start_line + NROWS - 1;
-	memset16(TEXT_ADDR + new_line * NCOLS, VMEM_CHAR(' ', txattr), NCOLS);
+	memset16(TEXT_ADDR + new_line * NCOLS * 2, VMEM_CHAR(' ', txattr), NCOLS);
 	crtc_setstart(start_line);
 }
 

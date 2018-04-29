@@ -34,6 +34,9 @@
 	# enable A20 address line
 	call enable_a20
 
+	# detect available memory
+	call detect_memory
+
 	# load the whole program into memory starting at 1MB
 	call load_main
 
@@ -552,6 +555,76 @@ kbc_wait_write:
 	ret
 
 numbuf: .space 16
+
+
+	# sets the carry flag on failure
+detect_memory:
+	mov $buffer, %edi
+	xor %ebx, %ebx
+	mov $0x534d4150, %edx
+
+memdet_looptop:
+	mov $0xe820, %eax
+	mov $24, %ecx
+	int $0x15
+	jc memdet_fail
+	cmp $0x534d4150, %eax
+	jnz memdet_fail
+
+	mov buffer, %eax
+	mov $boot_mem_map, %esi
+	mov boot_mem_map_size, %ebp
+	# again, that's [ebp * 8 + esi]
+	mov %eax, (%esi,%ebp,8)
+
+	# only care for type 1 (usable ram), otherwise ignore
+	cmpl $1, 16(%edi)
+	jnz memdet_skip
+
+	# skip areas with 0 size (also clamp size to 4gb)
+	# test high 32bits
+	cmpl $0, 12(%edi)
+	jz memdet_highzero
+	# high part is non-zero, make low part ffffffff
+	xor %eax, %eax
+	not %eax
+	jmp 0f
+
+memdet_highzero:
+	# if both high and low parts are zero, ignore
+	mov 8(%edi), %eax
+	cmpl $0, %eax
+	jz memdet_skip
+
+0:	mov %eax, 4(%esi,%ebp,8)
+	incl boot_mem_map_size
+
+memdet_skip:
+	# terminate the loop if ebx was reset to 0
+	cmp $0, %ebx
+	jz memdet_done
+	jmp memdet_looptop
+
+memdet_done:
+	ret
+
+memdet_fail:
+	# if size > 0, then it's not a failure, just the end
+	cmpl $0, boot_mem_map_size
+	jnz memdet_done
+
+	# just panic...
+	mov $memdet_fail_msg, %esi
+	call putstr
+0:	hlt
+	jmp 0b
+
+memdet_fail_msg: .asciz "Failed to detect available memory!\n"
+
+	.global boot_mem_map_size
+boot_mem_map_size: .long 0
+	.global boot_mem_map
+boot_mem_map: .space 128
 
 
 # this is not boot loader code. It's called later on by the main kernel

@@ -16,54 +16,29 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-#include "segm.h"
-#include "intr.h"
+#include "panic.h"
 #include "mem.h"
-#include "keyb.h"
-#include "timer.h"
-#include "contty.h"
-#include "video.h"
 
+struct mem_range {
+	uint32_t start;
+	uint32_t size;
+};
 
-void logohack(void);
+#define MAX_MAP_SIZE	16
+extern struct mem_range boot_mem_map[MAX_MAP_SIZE];
+extern int boot_mem_map_size;
 
-void pcboot_main(void)
+void init_mem(void)
 {
-	init_segm();
-	init_intr();
+	int i;
 
-	con_init();
-	kb_init();
+	if(boot_mem_map_size <= 0 || boot_mem_map_size > MAX_MAP_SIZE) {
+		panic("invalid memory map size reported by the boot loader: %d\n", boot_mem_map_size);
+	}
 
-	init_mem();
-
-	/* initialize the timer */
-	init_timer();
-
-	enable_intr();
-
-	printf("PCBoot kernel initialized\n");
-
-	for(;;) {
-		int c;
-
-		halt_cpu();
-		while((c = kb_getkey()) >= 0) {
-			if(c >= KB_F1 && c <= KB_F12) {
-				set_vga_mode(0x13);
-				logohack();
-				set_vga_mode(3);
-			}
-			if(isprint(c)) {
-				printf("key: %d '%c'       \n", c, (char)c);
-			} else {
-				printf("key: %d            \n", c);
-			}
-		}
-		if((nticks % 250) == 0) {
-			printf("ticks: %ld\r", nticks);
-		}
+	printf("Memory map:\n");
+	for(i=0; i<boot_mem_map_size; i++) {
+		printf(" start: %08x - size: %08x\n", (unsigned int)boot_mem_map[i].start,
+				(unsigned int)boot_mem_map[i].size);
 	}
 }
