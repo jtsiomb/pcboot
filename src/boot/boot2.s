@@ -615,15 +615,19 @@ e820_looptop:
 	cmp $0x534d4150, %eax
 	jnz e820_fail
 
+	# skip areas starting above 4GB as we won't be able to use them
+	cmpl $0, 4(%edi)
+	jnz e820_skip
+
+	# only care for type 1 (usable ram), otherwise ignore
+	cmpl $1, 16(%edi)
+	jnz e820_skip
+
 	mov buffer, %eax
 	mov $boot_mem_map, %esi
 	mov boot_mem_map_size, %ebp
 	# again, that's [ebp * 8 + esi]
 	mov %eax, (%esi,%ebp,8)
-
-	# only care for type 1 (usable ram), otherwise ignore
-	cmpl $1, 16(%edi)
-	jnz e820_skip
 
 	# skip areas with 0 size (also clamp size to 4gb)
 	# test high 32bits
