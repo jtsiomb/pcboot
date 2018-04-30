@@ -49,7 +49,7 @@ extern uint32_t _mem_start;
 
 
 /* A bitmap is used to track which physical memory pages are used, and which
- * are available for allocation by alloc_phys_page.
+ * are available for allocation by alloc_ppage.
  *
  * last_alloc_idx keeps track of the last 32bit element in the bitmap array
  * where a free page was found. It's guaranteed that all the elements before
@@ -132,54 +132,17 @@ void init_mem(void)
 	}
 }
 
-/* alloc_phys_page finds the first available page of physical memory,
- * marks it as used in the bitmap, and returns its number. If there's
- * no unused physical page, -1 is returned.
- */
 int alloc_ppage(void)
 {
-	int i, idx, max, intr_state;
-
-	intr_state = get_intr_flag();
-	disable_intr();
-
-	idx = last_alloc_idx;
-	max = bmsize / 4;
-
-	while(idx <= max) {
-		/* if at least one bit is 0 then we have at least
-		 * one free page. find it and allocate it.
-		 */
-		if(bitmap[idx] != 0xffffffff) {
-			for(i=0; i<32; i++) {
-				int pg = idx * 32 + i;
-
-				if(IS_FREE(pg)) {
-					mark_page(pg, USED);
-
-					last_alloc_idx = idx;
-
-					/*printf("alloc_phys_page() -> %x (page: %d)\n", PAGE_TO_ADDR(pg), pg);*/
-
-					set_intr_flag(intr_state);
-					return pg;
-				}
-			}
-			panic("can't happen: alloc_ppage (mem.c)\n");
-		}
-		idx++;
-	}
-
-	set_intr_flag(intr_state);
-	return -1;
+	return alloc_ppages(1);
 }
 
 /* free_ppage marks the physical page, free in the allocation bitmap.
  *
  * CAUTION: no checks are done that this page should actually be freed or not.
- * If you call free_phys_page with the address of some part of memory that was
+ * If you call free_ppage with the address of some part of memory that was
  * originally reserved due to it being in a memory hole or part of the kernel
- * image or whatever, it will be subsequently allocatable by alloc_phys_page.
+ * image or whatever, it will be subsequently allocatable by alloc_ppage.
  */
 void free_ppage(int pg)
 {
@@ -201,9 +164,60 @@ void free_ppage(int pg)
 }
 
 
+int alloc_ppages(int count)
+{
+	int i, pg, idx, max, intr_state, found_free = 0;
+
+	intr_state = get_intr_flag();
+	disable_intr();
+
+	idx = last_alloc_idx;
+	max = bmsize / 4;
+
+	while(idx <= max) {
+		/* if at least one bit is 0 then we have at least
+		 * one free page. find it and try to allocate a range starting from there
+		 */
+		if(bitmap[idx] != 0xffffffff) {
+			for(i=0; i<32; i++) {
+				pg = idx * 32 + i;
+
+				if(IS_FREE(pg)) {
+					if(!found_free) {
+						last_alloc_idx = idx;
+						found_free = 1;
+					}
+
+					if(alloc_ppage_range(pg, count) != -1) {
+						set_intr_flag(intr_state);
+						return pg;
+					}
+				}
+			}
+		}
+		idx++;
+	}
+
+	set_intr_flag(intr_state);
+	return -1;
+}
+
+void free_ppages(int pg0, int count)
+{
+	int i;
+
+	for(i=0; i<count; i++) {
+		free_ppage(pg0++);
+	}
+}
+
 int alloc_ppage_range(int start, int size)
 {
 	int i, pg = start;
+	int intr_state;
+
+	intr_state = get_intr_flag();
+	disable_intr();
 
 	/* first validate that no page in the requested range is allocated */
 	for(i=0; i<size; i++) {
@@ -218,6 +232,8 @@ int alloc_ppage_range(int start, int size)
 	for(i=0; i<size; i++) {
 		mark_page(pg++, USED);
 	}
+
+	set_intr_flag(intr_state);
 	return 0;
 }
 

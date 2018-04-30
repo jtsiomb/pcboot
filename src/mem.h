@@ -20,12 +20,22 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #define ADDR_TO_PAGE(x)			((uint32_t)(x) >> 12)
 #define PAGE_TO_ADDR(x)			((uint32_t)(x) << 12)
+#define PAGE_TO_PTR(x)			((void*)PAGE_TO_ADDR(x))
+
+#define BYTES_TO_PAGES(x)		(((uint32_t)(x) + 4095) >> 12)
 
 void init_mem(void);
 
 int alloc_ppage(void);
 void free_ppage(int pg);
 
+/* allocate a number of consecutive pages */
+int alloc_ppages(int count);
+void free_ppages(int pg0, int count);
+
+/* allocate a specific range of pages.
+ * Fails (and returns -1) if any page in the requested range is not free.
+ */
 int alloc_ppage_range(int start, int size);
 int free_ppage_range(int start, int size);
 

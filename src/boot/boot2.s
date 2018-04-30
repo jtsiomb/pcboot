@@ -685,15 +685,21 @@ detect_mem_e801:
 	movzx %cx, %eax
 	# first size is in KB, convert to bytes
 	shl $10, %eax
-	mov %eax, 4(%esi)
-	cmp $0, %dx
+	jnc 0f
+	# overflow means it's >4GB, clamp to 4GB
+	mov $0xffffffff, %eax
+0:	mov %eax, 4(%esi)
 	incl boot_mem_map_size
+	cmp $0, %dx
 	jz e801_done
 	movl $0x1000000, 8(%esi)
 	movzx %dx, %eax
 	# second size is in 64kb blocks, convert to bytes
 	shl $16, %eax
-	mov %eax, 12(%esi)
+	jnc 0f
+	# overflow means it's >4GB, clamp to 4GB
+	mov $0xffffffff, %eax
+0:	mov %eax, 12(%esi)
 	incl boot_mem_map_size
 e801_done:
 	clc

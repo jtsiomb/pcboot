@@ -33,4 +33,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #define EBUG			127	/* for missing features and known bugs */
 
+int errno;
+
 #endif	/* ERRNO_H_ */
