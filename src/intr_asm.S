@@ -104,7 +104,42 @@ intr_entry_fast_timer:
 	out %al, $0x20
 	pop %eax
 	iret
-	
+
+/* special case for IRQ 7 and IRQ 15, to catch spurious interrupts */
+	.set PIC1_CMD, 0x20
+	.set PIC2_CMD, 0xa0
+	.set OCW2_EOI, 0x20
+	.set OCW3_ISR, 0x0b
+
+	.extern intr_entry_irq7
+	.global irq7_entry_check_spurious
+irq7_entry_check_spurious:
+	push %eax
+	mov $OCW3_ISR, %al
+	out %al, $PIC1_CMD
+	in $PIC1_CMD, %al
+	and $0x80, %al
+	pop %eax
+	jnz intr_entry_irq7
+	iret
+
+	.extern intr_entry_irq15
+	.global irq15_entry_check_spurious
+irq15_entry_check_spurious:
+	push %eax
+	mov $OCW3_ISR, %al
+	out %al, $PIC2_CMD
+	in $PIC2_CMD, %al
+	and $0x80, %al
+	jnz 0f
+	# it was spurious, send EOI to master PIC and iret
+	mov $OCW2_EOI, %al
+	out %al, $PIC1_CMD
+	pop %eax
+	iret
+0:	pop %eax
+	jmp intr_entry_irq15
+
 
 /* XXX not necessary for now, just leaving it in in case it's useful
  * down the road.

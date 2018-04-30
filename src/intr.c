@@ -60,6 +60,8 @@ static void gate_desc(desc_t *desc, uint16_t sel, uint32_t addr, int dpl, int ty
 /* defined in intr_asm.S */
 void set_idt(uint32_t addr, uint16_t limit);
 void intr_entry_default(void);
+void irq7_entry_check_spurious(void);
+void irq15_entry_check_spurious(void);
 
 /* the IDT (interrupt descriptor table) */
 static desc_t idt[256] __attribute__((aligned(8)));
@@ -89,6 +91,12 @@ void init_intr(void)
 	 * corresponding calls to set_intr_entry to set up the IDT slots
 	 */
 #include "intrtab.h"
+
+	/* change irq7 and irq15 to special entry points which first
+	 * make sure we didn't get a spurious interrupt before proceeding
+	 */
+	set_intr_entry(IRQ_TO_INTR(7), irq7_entry_check_spurious);
+	set_intr_entry(IRQ_TO_INTR(15), irq15_entry_check_spurious);
 
 	/* initialize the programmable interrupt controller
 	 * setting up the maping of IRQs [0, 15] to interrupts [32, 47]
