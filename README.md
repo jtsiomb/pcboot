@@ -3,7 +3,7 @@ pcboot
 
 pcboot is a minimal 32 bit protected mode kernel, which can be used to make
 bootable PC demos or games. It's not designed as a regular standalone operating
-system kernel, and cannot be used as such. The intend is to link it with your
+system kernel, and cannot be used as such. The intent is to link it with your
 codebase, or more likely build your demo/game code around the pcboot kernel
 code.
 
