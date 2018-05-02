@@ -841,3 +841,5 @@ int_op:	int $0
 	# buffer used by the track loader ... to load tracks.
 	.align 16
 buffer:
+	.global low_mem_buffer
+low_mem_buffer:

@@ -51,10 +51,18 @@ void pcboot_main(void)
 
 		halt_cpu();
 		while((c = kb_getkey()) >= 0) {
-			if(c >= KB_F1 && c <= KB_F12) {
+			switch(c) {
+			case KB_F1:
 				set_vga_mode(0x13);
 				logohack();
 				set_vga_mode(3);
+				break;
+
+			case KB_F2:
+				set_video_mode(640, 480, 16);
+				vbetest();
+				set_vga_mode(3);
+				break;
 			}
 			if(isprint(c)) {
 				printf("key: %d '%c'       \n", c, (char)c);

@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define VIDEO_H_
 
 void set_vga_mode(int mode);
+void *set_video_mode(int xsz, int ysz, int bpp);
 
 /* defined in video_asm.s */
 void wait_vsync(void);
