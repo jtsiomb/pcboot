@@ -18,8 +18,24 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef VIDEO_H_
 #define VIDEO_H_
 
+struct video_mode {
+	int mode;
+	int width, height;
+	int bpp;
+	int rbits, gbits, bbits;
+	unsigned int rmask, gmask, bmask;
+};
+
 void set_vga_mode(int mode);
-void *set_video_mode(int xsz, int ysz, int bpp);
+
+void *set_video_mode(int mode);
+int find_video_mode(int xsz, int ysz, int bpp);
+
+int video_mode_count(void);
+int video_mode_info(int n, struct video_mode *vid);
+
+int get_color_bits(int *rbits, int *gbits, int *bbits);
+int get_color_mask(unsigned int *rmask, unsigned int *gmask, unsigned int *bmask);
 
 /* defined in video_asm.s */
 void wait_vsync(void);

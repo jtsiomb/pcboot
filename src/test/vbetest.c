@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 #include "video.h"
 #include "asmops.h"
@@ -7,7 +8,20 @@ static uint16_t *framebuf;
 
 int vbetest(void)
 {
-	if(!(framebuf = set_video_mode(640, 480, 16))) {
+	int i, nmodes;
+	struct video_mode vi;
+
+	nmodes = video_mode_count();
+	printf("%d video modes found:\n", nmodes);
+	for(i=0; i<nmodes; i++) {
+		if(video_mode_info(i, &vi) == -1) {
+			continue;
+		}
+		printf(" %04x: %dx%d %d bpp (%d%d%d)\n", vi.mode, vi.width, vi.height, vi.bpp,
+				vi.rbits, vi.gbits, vi.bbits);
+	}
+
+	if(!(framebuf = set_video_mode(find_video_mode(640, 480, 16)))) {
 		return -1;
 	}
 

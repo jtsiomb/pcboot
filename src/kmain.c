@@ -60,9 +60,7 @@ void pcboot_main(void)
 				break;
 
 			case KB_F2:
-				set_video_mode(640, 480, 16);
 				vbetest();
-				set_vga_mode(3);
 				break;
 			}
 			if(isprint(c)) {
