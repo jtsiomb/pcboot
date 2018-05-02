@@ -71,11 +71,11 @@ $(elf).sym: $(elf)
 
 .PHONY: run
 run: $(bin)
-	qemu-system-i386 -fda floppy.img -serial file:serial.log
+	qemu-system-i386 -fda floppy.img -serial file:serial.log -vga std
 
 .PHONY: debug
 debug: $(bin) $(elf).sym
-	qemu-system-i386 -fda floppy.img -serial file:serial.log -s -S
+	qemu-system-i386 -fda floppy.img -serial file:serial.log -vga std -s -S
 
 .PHONY: sym
 sym: $(elf).sym

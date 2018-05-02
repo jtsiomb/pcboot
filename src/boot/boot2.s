@@ -803,6 +803,10 @@ int86:
 	mov %ebp, saved_ebp
 	mov 12(%ebp), %esp
 	popal
+	popfw
+	pop %es
+	pop %ds
+	# ignore fs and gs for now, don't think I'm going to need them
 	mov saved_esp, %esp
 
 	# call 16bit interrupt
@@ -810,7 +814,9 @@ int_op:	int $0
 
 	mov saved_ebp, %ebp
 	mov 12(%ebp), %esp
-	add $34, %esp
+	add $38, %esp
+	push %ds
+	push %es
 	pushfw
 	pushal
 	mov saved_esp, %esp
