@@ -25,6 +25,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "timer.h"
 #include "contty.h"
 #include "video.h"
+#include "vbetest.h"
 
 
 void logohack(void);

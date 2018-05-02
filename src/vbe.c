@@ -9,14 +9,14 @@
 
 #define MODE_LFB	(1 << 14)
 
-extern void *low_mem_buffer;
+extern unsigned char low_mem_buffer[];
 
 struct vbe_info *vbe_get_info(void)
 {
 	struct vbe_info *info;
 	struct int86regs regs;
 
-	info = low_mem_buffer;
+	info = (struct vbe_info*)low_mem_buffer;
 
 	memcpy(info->sig, "VBE2", 4);
 
@@ -24,6 +24,10 @@ struct vbe_info *vbe_get_info(void)
 	regs.es = (uint32_t)low_mem_buffer >> 4;
 	regs.eax = 0x4f00;
 	int86(0x10, &regs);
+
+	if((regs.eax & 0xffff) != 0x4f) {
+		return 0;
+	}
 
 	return info;
 }
@@ -33,7 +37,7 @@ struct vbe_mode_info *vbe_get_mode_info(int mode)
 	struct vbe_mode_info *mi;
 	struct int86regs regs;
 
-	mi = low_mem_buffer;
+	mi = (struct vbe_mode_info*)low_mem_buffer;
 
 	memset(&regs, 0, sizeof regs);
 	regs.es = (uint32_t)low_mem_buffer >> 4;
@@ -41,7 +45,7 @@ struct vbe_mode_info *vbe_get_mode_info(int mode)
 	regs.ecx = mode;
 	int86(0x10, &regs);
 
-	if(regs.eax & 0xff00) {
+	if((regs.eax & 0xffff) != 0x4f) {
 		return 0;
 	}
 
