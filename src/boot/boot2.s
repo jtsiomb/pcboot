@@ -763,6 +763,9 @@ rmidt:	.short 0x3ff
 
 saved_esp: .long 0
 saved_ebp: .long 0
+saved_eax: .long 0
+saved_es: .word 0
+saved_ds: .word 0
 
 	# drop back to unreal mode to call 16bit interrupt
 	.global int86
@@ -809,17 +812,18 @@ int86:
 	# ignore fs and gs for now, don't think I'm going to need them
 	mov saved_esp, %esp
 
+	# move to the real-mode stack, accessible from ss=0
+	# just in case the BIOS call screws up our unreal mode
+	mov $0x7be0, %esp
+
 	# call 16bit interrupt
 int_op:	int $0
 
-	mov saved_ebp, %ebp
-	mov 12(%ebp), %esp
-	add $38, %esp
-	push %ds
-	push %es
-	pushfw
-	pushal
-	mov saved_esp, %esp
+	# save all registers that we'll clobber before having the
+	# chance to populate the int86regs structure
+	mov %eax, saved_eax
+	mov %ds, saved_ds
+	mov %es, saved_es
 
 	# re-enable protection
 	mov %cr0, %eax
@@ -835,6 +839,18 @@ int_op:	int $0
 	mov %ax, %es
 	mov %ax, %ss
 	nop
+
+	mov saved_ebp, %ebp
+	mov 12(%ebp), %esp
+	add $38, %esp
+	mov saved_ds, %ax
+	pushw %ax
+	mov saved_es, %ax
+	pushw %ax
+	pushfw
+	mov saved_eax, %eax
+	pushal
+	mov saved_esp, %esp
 
 	# restore 32bit interrupt descriptor table
 	lidt (saved_idtr)
