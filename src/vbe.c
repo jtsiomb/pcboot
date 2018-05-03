@@ -16,14 +16,18 @@ struct vbe_info *vbe_get_info(void)
 	struct vbe_info *info;
 	struct int86regs regs;
 
+	printf("vbe_get_info... ");
+
 	info = (struct vbe_info*)low_mem_buffer;
 
 	memcpy(info->sig, "VBE2", 4);
 
 	memset(&regs, 0, sizeof regs);
-	regs.es = (uint32_t)low_mem_buffer >> 4;
+	regs.es = (uint32_t)info >> 4;
 	regs.eax = 0x4f00;
 	int86(0x10, &regs);
+
+	printf("status: %d\n", (regs.eax >> 8) & 0xff);
 
 	if((regs.eax & 0xffff) != 0x4f) {
 		return 0;
@@ -37,10 +41,10 @@ struct vbe_mode_info *vbe_get_mode_info(int mode)
 	struct vbe_mode_info *mi;
 	struct int86regs regs;
 
-	mi = (struct vbe_mode_info*)low_mem_buffer;
+	mi = (struct vbe_mode_info*)(low_mem_buffer + 512);
 
 	memset(&regs, 0, sizeof regs);
-	regs.es = (uint32_t)low_mem_buffer >> 4;
+	regs.es = (uint32_t)mi >> 4;
 	regs.eax = 0x4f01;
 	regs.ecx = mode;
 	int86(0x10, &regs);

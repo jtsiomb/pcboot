@@ -23,6 +23,7 @@ struct video_mode {
 	int width, height;
 	int bpp;
 	int rbits, gbits, bbits;
+	int rshift, gshift, bshift;
 	unsigned int rmask, gmask, bmask;
 };
 
@@ -36,6 +37,7 @@ int video_mode_info(int n, struct video_mode *vid);
 
 int get_color_bits(int *rbits, int *gbits, int *bbits);
 int get_color_mask(unsigned int *rmask, unsigned int *gmask, unsigned int *bmask);
+int get_color_shift(int *rshift, int *gshift, int *bshift);
 
 /* defined in video_asm.s */
 void wait_vsync(void);

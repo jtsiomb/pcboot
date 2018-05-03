@@ -89,7 +89,7 @@ static int init_once(void)
 void *set_video_mode(int mode)
 {
 	if(init_once() == -1) return 0;
-	if(mode < 0 || mode >= mode_count) return 0;
+	if(mode < 0) return 0;
 
 	if(!(mode_info = vbe_get_mode_info(mode))) {
 		return 0;
@@ -150,6 +150,9 @@ int video_mode_info(int n, struct video_mode *vid)
 	vid->rbits = inf->rmask_size;
 	vid->gbits = inf->gmask_size;
 	vid->bbits = inf->bmask_size;
+	vid->rshift = inf->rpos;
+	vid->gshift = inf->gpos;
+	vid->bshift = inf->bpos;
 	vid->rmask = color_mask(inf->rmask_size, inf->rpos);
 	vid->gmask = color_mask(inf->gmask_size, inf->gpos);
 	vid->bmask = color_mask(inf->bmask_size, inf->bpos);
