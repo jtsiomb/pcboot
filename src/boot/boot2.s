@@ -778,7 +778,7 @@ int86:
 	sidt (saved_idtr)
 	lidt (rmidt)
 
-	# modify the int instruction do this here before the
+	# modify the int instruction. do this here before the
 	# cs-load jumps, to let them flush the instruction cache
 	mov $int_op, %ebx
 	movb 8(%ebp), %al
@@ -802,6 +802,7 @@ int86:
 	nop
 
 	# load registers from the int86regs struct
+	# point esp to the regs struct to load registers with popa/popf
 	mov %esp, saved_esp
 	mov %ebp, saved_ebp
 	mov 12(%ebp), %esp
@@ -818,6 +819,8 @@ int86:
 
 	# call 16bit interrupt
 int_op:	int $0
+	# BIOS call might have enabled interrupts, cli for good measure
+	cli
 
 	# save all registers that we'll clobber before having the
 	# chance to populate the int86regs structure
@@ -840,6 +843,7 @@ int_op:	int $0
 	mov %ax, %ss
 	nop
 
+	# point the esp to our regs struct, to fill it with pusha/pushf
 	mov saved_ebp, %ebp
 	mov 12(%ebp), %esp
 	add $38, %esp
