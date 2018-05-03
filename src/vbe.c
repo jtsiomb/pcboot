@@ -16,8 +16,6 @@ struct vbe_info *vbe_get_info(void)
 	struct vbe_info *info;
 	struct int86regs regs;
 
-	printf("vbe_get_info... ");
-
 	info = (struct vbe_info*)low_mem_buffer;
 
 	memcpy(info->sig, "VBE2", 4);
@@ -26,8 +24,6 @@ struct vbe_info *vbe_get_info(void)
 	regs.es = (uint32_t)info >> 4;
 	regs.eax = 0x4f00;
 	int86(0x10, &regs);
-
-	printf("status: %d\n", (regs.eax >> 8) & 0xff);
 
 	if((regs.eax & 0xffff) != 0x4f) {
 		return 0;
