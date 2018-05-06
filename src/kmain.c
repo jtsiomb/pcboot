@@ -25,6 +25,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "timer.h"
 #include "contty.h"
 #include "video.h"
+#include "pci.h"
 #include "vbetest.h"
 
 
@@ -39,6 +40,8 @@ void pcboot_main(void)
 	kb_init();
 
 	init_mem();
+
+	init_pci();
 
 	/* initialize the timer */
 	init_timer();
