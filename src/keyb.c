@@ -15,6 +15,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
+#include <string.h>
 #include "keyb.h"
 #include "intr.h"
 #include "asmops.h"
@@ -49,6 +50,10 @@ static unsigned char keystate[256];
 
 void kb_init(void)
 {
+	buf_ridx = buf_widx = 0;
+	num_pressed = 0;
+	memset(keystate, 0, sizeof keystate);
+
 	interrupt(IRQ_TO_INTR(KB_IRQ), kbintr);
 }
 
