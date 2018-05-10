@@ -22,6 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "intr.h"
 #include "mem.h"
 #include "keyb.h"
+#include "psaux.h"
 #include "timer.h"
 #include "contty.h"
 #include "video.h"
@@ -38,6 +39,7 @@ void pcboot_main(void)
 
 	con_init();
 	kb_init();
+	init_psaux();
 
 	init_mem();
 
@@ -67,13 +69,13 @@ void pcboot_main(void)
 				break;
 			}
 			if(isprint(c)) {
-				printf("key: %d '%c'       \n", c, (char)c);
+				printf("key: %d '%c'\n", c, (char)c);
 			} else {
-				printf("key: %d            \n", c);
+				printf("key: %d\n", c);
 			}
 		}
 		if((nticks % 250) == 0) {
-			printf("ticks: %ld\r", nticks);
+			con_printf(71, 0, "[%ld]", nticks);
 		}
 	}
 }

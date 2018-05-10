@@ -228,6 +228,11 @@ static int can_send(int fd)
 void ser_putc(int fd, char c)
 {
 	int base = ports[fd].base;
+
+	if(c == '\n') {
+		ser_putc(fd, '\r');
+	}
+
 	while(!can_send(fd));
 	while((inb(base + UART_MSTAT) & MST_CTS) == 0);
 	outb(c, base + UART_DATA);

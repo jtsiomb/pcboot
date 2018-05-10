@@ -15,13 +15,13 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
+#include <stdio.h>
 #include <string.h>
 #include "keyb.h"
 #include "intr.h"
 #include "asmops.h"
+#include "kbregs.h"
 
-#define KB_IRQ	1
-#define KB_PORT		0x60
 
 /* table with rough translations from set 1 scancodes to ASCII-ish */
 static int scantbl[] = {
@@ -115,12 +115,56 @@ void kb_putback(int key)
 	buffer[buf_ridx] = key;
 }
 
+int kb_wait_write(void)
+{
+	int i;
+	for(i=0; i<32768; i++) {
+		if(!(inb(KB_STATUS_PORT) & KB_STAT_INBUF_FULL)) {
+			return 1;
+		}
+		iodelay();
+	}
+	/*printf("kb_wait_write timeout\n");*/
+	return 0;
+}
+
+int kb_wait_read(void)
+{
+	int i;
+	for(i=0; i<32768; i++) {
+		if((inb(KB_STATUS_PORT) & KB_STAT_OUTBUF_FULL)) {
+			return 1;
+		}
+		iodelay();
+	}
+	/*printf("kb_wait_read timeout\n");*/
+	return 0;
+}
+
+void kb_send_cmd(unsigned char cmd)
+{
+	kb_wait_write();
+	outb(cmd, KB_CMD_PORT);
+}
+
+void kb_send_data(unsigned char data)
+{
+	kb_wait_write();
+	outb(data, KB_DATA_PORT);
+}
+
+unsigned char kb_read_data(void)
+{
+	kb_wait_read();
+	return inb(KB_DATA_PORT);
+}
+
 static void kbintr()
 {
 	unsigned char code;
 	int key, press;
 
-	code = inb(KB_PORT);
+	code = inb(KB_DATA_PORT);
 
 	if(code >= 128) {
 		press = 0;

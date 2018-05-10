@@ -24,6 +24,7 @@
 	.extern kb_getkey
 
 	# move the stack to the top of the conventional memory
+	cli
 	movl $0x80000, %esp
 
 	# zero the BSS section

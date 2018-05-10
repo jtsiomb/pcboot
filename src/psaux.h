@@ -15,17 +15,18 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef CONTTY_H_
-#define CONTTY_H_
+#ifndef PSAUX_H_
+#define PSAUX_H_
 
-int con_init(void);
-void con_show_cursor(int show);
-void con_cursor(int x, int y);
-void con_fgcolor(int c);
-void con_bgcolor(int c);
-void con_clear(void);
-void con_putchar(int c);
+#define MOUSE_LBN_BIT	1
+#define MOUSE_RBN_BIT	2
+#define MOUSE_MBN_BIT	4
 
-void con_putchar_scr(int x, int y, int c);
+void init_psaux(void);
 
-#endif	/* CONTTY_H_ */
+int have_mouse(void);
+
+void set_mouse_bounds(int x0, int y0, int x1, int y1);
+unsigned int mouse_state(int *xp, int *yp);
+
+#endif	/* PSAUX_H_ */

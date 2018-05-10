@@ -56,4 +56,14 @@ int kb_getkey(void);
 
 void kb_putback(int key);
 
+/* returns 1 if the keyboard controller is ready to read/write
+ * returns 0 if the wait times out
+ */
+int kb_wait_write(void);
+int kb_wait_read(void);
+
+void kb_send_cmd(unsigned char cmd);
+void kb_send_data(unsigned char data);
+unsigned char kb_read_data(void);
+
 #endif	/* KEYB_H_ */

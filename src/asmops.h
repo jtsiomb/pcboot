@@ -74,6 +74,7 @@ static inline uint32_t inl(uint16_t port)
 		"outl %0, %1\n\t" \
 		:: "a" ((uint32_t)(src)), "dN" ((uint16_t)(port)))
 
+/* delay for about 1us */
 #define iodelay() outb(0, 0x80)
 
 

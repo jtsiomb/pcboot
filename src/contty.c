@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include "contty.h"
 #include "serial.h"
 #include "asmops.h"
@@ -145,8 +146,7 @@ void con_putchar(int c)
 		break;
 
 	default:
-		ptr = (uint16_t*)TEXT_ADDR;
-		ptr[(cursor_y + start_line) * NCOLS + cursor_x] = VMEM_CHAR(c, txattr);
+		con_putchar_scr(cursor_x, cursor_y, c);
 
 		if(++cursor_x >= NCOLS) {
 			linefeed();
@@ -159,6 +159,27 @@ void con_putchar(int c)
 #ifdef CON_SERIAL
 	ser_putchar(c);
 #endif
+}
+
+void con_putchar_scr(int x, int y, int c)
+{
+	uint16_t *ptr = (uint16_t*)TEXT_ADDR;
+	ptr[(y + start_line) * NCOLS + x] = VMEM_CHAR(c, txattr);
+}
+
+void con_printf(int x, int y, const char *fmt, ...)
+{
+	va_list ap;
+	char buf[81];
+	char *ptr = buf;
+
+	va_start(ap, fmt);
+	vsnprintf(buf, 80, fmt, ap);
+	va_end(ap);
+
+	while(*ptr && x < 80) {
+		con_putchar_scr(x++, y, *ptr++);
+	}
 }
 
 static void scroll(void)

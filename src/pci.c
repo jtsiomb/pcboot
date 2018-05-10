@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <string.h>
 #include <inttypes.h>
 #include "pci.h"
+#include "intr.h"
 #include "int86.h"
 #include "asmops.h"
 #include "panic.h"
@@ -69,11 +70,17 @@ static uint32_t (*cfg_read32)(int, int, int, int);
 void init_pci(void)
 {
 	int i, count = 0;
+	int intrflag;
 	struct int86regs regs;
+
+	intrflag = get_intr_flag();
 
 	memset(&regs, 0, sizeof regs);
 	regs.eax = 0xb101;
 	int86(0x1a, &regs);
+
+	/* restore interrupt state in case bios changed it */
+	set_intr_flag(intrflag);
 
 	/* PCI BIOS present if CF=0, AH=0, and EDX has the "PCI " sig FOURCC */
 	if((regs.flags & FLAGS_CARRY) || (regs.eax & 0xff00) || regs.edx != PCI_SIG) {
