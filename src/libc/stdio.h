@@ -33,4 +33,8 @@ int vsprintf(char *buf, const char *fmt, va_list ap);
 int snprintf(char *buf, size_t sz, const char *fmt, ...);
 int vsnprintf(char *buf, size_t sz, const char *fmt, va_list ap);
 
+/* printf to the serial port */
+int ser_printf(const char *fmt, ...);
+int ser_vprintf(const char *fmt, va_list ap);
+
 #endif	/* STDIO_H_ */

@@ -29,4 +29,6 @@ int have_mouse(void);
 void set_mouse_bounds(int x0, int y0, int x1, int y1);
 unsigned int mouse_state(int *xp, int *yp);
 
+void poll_mouse(void);
+
 #endif	/* PSAUX_H_ */

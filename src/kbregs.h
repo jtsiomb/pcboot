@@ -55,6 +55,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define KB_CCB_KB_XLAT			0x40
 
 /* psaux commands (use with d4 prefix) */
+#define AUX_CMD_STREAM_MODE		0xea
+#define AUX_CMD_READ_MOUSE		0xeb
+#define AUX_CMD_REMOTE_MODE		0xf0
 #define AUX_CMD_ENABLE			0xf4
 #define AUX_CMD_DEFAULTS		0xf6
 

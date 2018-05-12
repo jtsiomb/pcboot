@@ -27,5 +27,6 @@ void con_clear(void);
 void con_putchar(int c);
 
 void con_putchar_scr(int x, int y, int c);
+void con_printf(int x, int y, const char *fmt, ...);
 
 #endif	/* CONTTY_H_ */

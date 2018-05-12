@@ -22,24 +22,25 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "keyb.h"
 #include "kbregs.h"
 
-static void init_mouse();
+static void init_mouse(void);
+static void proc_mouse_data(unsigned char *data);
 static void psaux_intr();
 
 static int mx, my;
 static unsigned int bnstate;
 static int present;
 static int bounds[4];
+static int intr_mode;
 
 void init_psaux(void)
 {
 	interrupt(IRQ_TO_INTR(12), psaux_intr);
 
-	set_mouse_bounds(0, 0, 319, 199);
-
 	init_mouse();
+	set_mouse_bounds(0, 0, 319, 199);
 }
 
-static void init_mouse()
+static void init_mouse(void)
 {
 	unsigned char val;
 
@@ -48,6 +49,12 @@ static void init_mouse()
 		val = kb_read_data();
 		printf("aux enable: %02x\n", (unsigned int)val);
 	}
+
+	/*
+	kb_send_cmd(KB_CMD_PSAUX);
+	kb_send_data(AUX_CMD_REMOTE_MODE);
+	val = kb_read_data();
+	*/
 
 	kb_send_cmd(KB_CMD_GET_CMDBYTE);
 	val = kb_read_data();
@@ -60,6 +67,7 @@ static void init_mouse()
 		val = kb_read_data();
 		printf("set cmdbyte: %02x\n", (unsigned int)val);
 	}
+	intr_mode = 1;
 
 	kb_send_cmd(KB_CMD_PSAUX);
 	kb_send_data(AUX_CMD_DEFAULTS);
@@ -88,16 +96,102 @@ void set_mouse_bounds(int x0, int y0, int x1, int y1)
 
 unsigned int mouse_state(int *xp, int *yp)
 {
+	if(!intr_mode) {
+		poll_mouse();
+	}
+
 	*xp = mx;
 	*yp = my;
 	return bnstate;
+}
+
+/* TODO: poll_mouse doesn't work (enable remote mode and disable interrupt on init to test) */
+#define STAT_AUX_PENDING		(KB_STAT_OUTBUF_FULL | KB_STAT_AUX)
+static inline int aux_pending(void)
+{
+	return (inb(KB_STATUS_PORT) & STAT_AUX_PENDING) == STAT_AUX_PENDING ? 1 : 0;
+}
+
+void poll_mouse(void)
+{
+	static int poll_state;
+	static unsigned char pkt[3];
+	unsigned char rd;
+
+	ser_printf("poll_mouse(%d)\n", poll_state);
+
+	switch(poll_state) {
+	case 0:	/* send read mouse command */
+		kb_send_cmd(KB_CMD_PSAUX);
+		kb_send_data(AUX_CMD_READ_MOUSE);
+		++poll_state;
+		break;
+
+	case 1:	/* wait for ACK */
+		if(kb_wait_read()) {// && aux_pending()) {
+			if((rd = kb_read_data()) == KB_ACK) {
+				++poll_state;
+			} else {
+				ser_printf("poll_mouse state 1: expected ack: %02x\n", (unsigned int)rd);
+			}
+		}
+		break;
+
+	case 2:	/* read packet data */
+	case 3:
+	case 4:
+		if(kb_wait_read() && aux_pending()) {
+			int i = poll_state++ - 2;
+			pkt[i] = kb_read_data();
+		}
+		if(poll_state == 5) {
+			ser_printf("proc_mouse_data(%02x %02x %02x)\n", (unsigned int)pkt[0],
+					(unsigned int)pkt[1], (unsigned int)pkt[2]);
+			proc_mouse_data(pkt);
+			poll_state = 0;
+		}
+		break;
+
+	default:
+		ser_printf("poll_mouse reached state: %d\n", poll_state);
+	}
+}
+
+static void proc_mouse_data(unsigned char *data)
+{
+	int dx, dy;
+
+	if(data[0] & AUX_PKT0_OVF_BITS) {
+		/* consensus seems to be that if overflow bits are set, something is
+		 * fucked, and it's best to re-initialize the mouse
+		 */
+		/*init_mouse();*/
+	} else {
+		bnstate = data[0] & AUX_PKT0_BUTTON_BITS;
+		dx = data[1];
+		dy = data[2];
+
+		if(data[0] & AUX_PKT0_XSIGN) {
+			dx |= 0xffffff00;
+		}
+		if(data[0] & AUX_PKT0_YSIGN) {
+			dy |= 0xffffff00;
+		}
+
+		mx += dx;
+		my -= dy;
+
+		if(mx < bounds[0]) mx = bounds[0];
+		if(mx > bounds[2]) mx = bounds[2];
+		if(my < bounds[1]) my = bounds[1];
+		if(my > bounds[3]) my = bounds[3];
+	}
 }
 
 static void psaux_intr()
 {
 	static unsigned char data[3];
 	static int idx;
-	int dx, dy;
 
 	if(!(inb(KB_STATUS_PORT) & KB_STAT_AUX)) {
 		/* no mouse data pending, ignore interrupt */
@@ -108,40 +202,6 @@ static void psaux_intr()
 	if(++idx >= 3) {
 		idx = 0;
 
-		if(data[0] & AUX_PKT0_OVF_BITS) {
-			/* consensus seems to be that if overflow bits are set, something is
-			 * fucked, and it's best to re-initialize the mouse
-			 */
-			init_mouse();
-		} else {
-			/*
-			printf("psaux data packet: %02x %02x %02x\n", (unsigned int)data[0],
-					(unsigned int)data[1], (unsigned int)data[2]);
-			*/
-
-			bnstate = data[0] & AUX_PKT0_BUTTON_BITS;
-			dx = data[1];
-			dy = data[2];
-
-			if(data[0] & AUX_PKT0_XSIGN) {
-				dx |= 0xffffff00;
-			}
-			if(data[0] & AUX_PKT0_YSIGN) {
-				dy |= 0xffffff00;
-			}
-
-			mx += dx;
-			my -= dy;
-
-			if(mx < bounds[0]) mx = bounds[0];
-			if(mx > bounds[2]) mx = bounds[2];
-			if(my < bounds[1]) my = bounds[1];
-			if(my > bounds[3]) my = bounds[3];
-
-			/*
-			printf("mouse: %d,%d [%c%c%c]\n", mx, my, bnstate & AUX_PKT0_LEFTBN ? '1' : '0',
-					bnstate & AUX_PKT0_MIDDLEBN ? '1' : '0', bnstate & AUX_PKT0_RIGHTBN ? '1' : '0');
-			*/
-		}
+		proc_mouse_data(data);
 	}
 }

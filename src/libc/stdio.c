@@ -19,11 +19,19 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <string.h>
 #include <ctype.h>
 #include "contty.h"
+#include "serial.h"
+
+enum {
+	OUT_DEF,
+	OUT_BUF,
+	OUT_SCR,
+	OUT_SER
+};
 
 extern void pcboot_putchar(int c);
 
-static void bwrite(char *buf, size_t buf_sz, char *str, int sz);
-static int intern_printf(char *buf, size_t sz, const char *fmt, va_list ap);
+static void bwrite(int out, char *buf, size_t buf_sz, char *str, int sz);
+static int intern_printf(int out, char *buf, size_t sz, const char *fmt, va_list ap);
 
 int putchar(int c)
 {
@@ -52,14 +60,14 @@ int printf(const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
-	res = intern_printf(0, 0, fmt, ap);
+	res = intern_printf(OUT_DEF, 0, 0, fmt, ap);
 	va_end(ap);
 	return res;
 }
 
 int vprintf(const char *fmt, va_list ap)
 {
-	return intern_printf(0, 0, fmt, ap);
+	return intern_printf(OUT_DEF, 0, 0, fmt, ap);
 }
 
 int sprintf(char *buf, const char *fmt, ...)
@@ -68,14 +76,14 @@ int sprintf(char *buf, const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
-	res = intern_printf(buf, 0, fmt, ap);
+	res = intern_printf(OUT_BUF, buf, 0, fmt, ap);
 	va_end(ap);
 	return res;
 }
 
 int vsprintf(char *buf, const char *fmt, va_list ap)
 {
-	return intern_printf(buf, 0, fmt, ap);
+	return intern_printf(OUT_BUF, buf, 0, fmt, ap);
 }
 
 int snprintf(char *buf, size_t sz, const char *fmt, ...)
@@ -84,16 +92,31 @@ int snprintf(char *buf, size_t sz, const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
-	res = intern_printf(buf, sz, fmt, ap);
+	res = intern_printf(OUT_BUF, buf, sz, fmt, ap);
 	va_end(ap);
 	return res;
 }
 
 int vsnprintf(char *buf, size_t sz, const char *fmt, va_list ap)
 {
-	return intern_printf(buf, sz, fmt, ap);
+	return intern_printf(OUT_BUF, buf, sz, fmt, ap);
 }
 
+int ser_printf(const char *fmt, ...)
+{
+	int res;
+	va_list ap;
+
+	va_start(ap, fmt);
+	res = intern_printf(OUT_SER, 0, 0, fmt, ap);
+	va_end(ap);
+	return res;
+}
+
+int ser_vprintf(const char *fmt, va_list ap)
+{
+	return intern_printf(OUT_SER, 0, 0, fmt, ap);
+}
 
 /* intern_printf provides all the functionality needed by all the printf
  * variants.
@@ -108,7 +131,7 @@ int vsnprintf(char *buf, size_t sz, const char *fmt, va_list ap)
 #define BUF(x)	((x) ? (x) + cnum : (x))
 #define SZ(x)	((x) ? (x) - cnum : (x))
 
-static int intern_printf(char *buf, size_t sz, const char *fmt, va_list ap)
+static int intern_printf(int out, char *buf, size_t sz, const char *fmt, va_list ap)
 {
 	char conv_buf[32];
 	char *str;
@@ -143,7 +166,7 @@ static int intern_printf(char *buf, size_t sz, const char *fmt, va_list ap)
 					base = 16;
 
 					if(alt) {
-						bwrite(BUF(buf), SZ(sz), "0x", 2);
+						bwrite(out, BUF(buf), SZ(sz), "0x", 2);
 					}
 
 				case 'u':
@@ -154,7 +177,7 @@ static int intern_printf(char *buf, size_t sz, const char *fmt, va_list ap)
 						base = 8;
 
 						if(alt) {
-							bwrite(BUF(buf), SZ(sz), "0", 1);
+							bwrite(out, BUF(buf), SZ(sz), "0", 1);
 						}
 					}
 
@@ -173,18 +196,18 @@ static int intern_printf(char *buf, size_t sz, const char *fmt, va_list ap)
 
 					slen = strlen(conv_buf);
 					for(i=slen; i<fwidth; i++) {
-						bwrite(BUF(buf), SZ(sz), (char*)&padc, 1);
+						bwrite(out, BUF(buf), SZ(sz), (char*)&padc, 1);
 						cnum++;
 					}
 
-					bwrite(BUF(buf), SZ(sz), conv_buf, strlen(conv_buf));
+					bwrite(out, BUF(buf), SZ(sz), conv_buf, strlen(conv_buf));
 					cnum += slen;
 					break;
 
 				case 'c':
 					{
 						char c = va_arg(ap, int);
-						bwrite(BUF(buf), SZ(sz), &c, 1);
+						bwrite(out, BUF(buf), SZ(sz), &c, 1);
 						cnum++;
 					}
 					break;
@@ -194,10 +217,10 @@ static int intern_printf(char *buf, size_t sz, const char *fmt, va_list ap)
 					slen = strlen(str);
 
 					for(i=slen; i<fwidth; i++) {
-						bwrite(BUF(buf), SZ(sz), (char*)&padc, 1);
+						bwrite(out, BUF(buf), SZ(sz), (char*)&padc, 1);
 						cnum++;
 					}
-					bwrite(BUF(buf), SZ(sz), str, slen);
+					bwrite(out, BUF(buf), SZ(sz), str, slen);
 					cnum += slen;
 					break;
 
@@ -252,7 +275,7 @@ static int intern_printf(char *buf, size_t sz, const char *fmt, va_list ap)
 				fmt++;
 			}
 		} else {
-			bwrite(BUF(buf), SZ(sz), (char*)fmt++, 1);
+			bwrite(out, BUF(buf), SZ(sz), (char*)fmt++, 1);
 			cnum++;
 		}
 	}
@@ -262,19 +285,34 @@ static int intern_printf(char *buf, size_t sz, const char *fmt, va_list ap)
 
 
 /* bwrite is called by intern_printf to transparently handle writing into a
- * buffer (if buf is non-null) or to the terminal (if buf is null).
+ * buffer or to the terminal
  */
-static void bwrite(char *buf, size_t buf_sz, char *str, int sz)
+static void bwrite(int out, char *buf, size_t buf_sz, char *str, int sz)
 {
-	if(buf) {
+	int i;
+
+	if(out == OUT_BUF) {
 		if(buf_sz && buf_sz <= sz) sz = buf_sz - 1;
 		memcpy(buf, str, sz);
 
 		buf[sz] = 0;
 	} else {
-		int i;
-		for(i=0; i<sz; i++) {
-			putchar(*str++);
+		switch(out) {
+		case OUT_DEF:
+			for(i=0; i<sz; i++) {
+				putchar(*str++);
+			}
+			break;
+
+		case OUT_SER:
+			for(i=0; i<sz; i++) {
+				ser_putchar(*str++);
+			}
+			break;
+
+		default:
+			/* TODO: OUT_SCR */
+			break;
 		}
 	}
 }

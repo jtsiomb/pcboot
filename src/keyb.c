@@ -22,6 +22,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "asmops.h"
 #include "kbregs.h"
 
+#define delay7us() \
+	do { \
+		iodelay(); iodelay(); iodelay(); iodelay(); \
+		iodelay(); iodelay(); iodelay(); \
+	} while(0)
 
 /* table with rough translations from set 1 scancodes to ASCII-ish */
 static int scantbl[] = {
@@ -156,6 +161,7 @@ void kb_send_data(unsigned char data)
 unsigned char kb_read_data(void)
 {
 	kb_wait_read();
+	delay7us();
 	return inb(KB_DATA_PORT);
 }
 
