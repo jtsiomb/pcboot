@@ -49,6 +49,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 /* immediately pause/continue */
 #define CMD_PAUSE_DMA8		0xd0
+#define CMD_ENABLE_OUTPUT	0xd1
+#define CMD_DISABLE_OUTPUT	0xd3
 #define CMD_CONT_DMA8		0xd4
 #define CMD_PAUSE_DMA16		0xd5
 #define CMD_CONT_DMA16		0xd6
@@ -61,6 +63,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define CMD_MODE_SIGNED		0x10
 #define CMD_MODE_STEREO		0x20
 
+/* mixer registers */
+#define MIX_IRQ_SEL			0x80
+#define MIX_DMA_SEL			0x81
+
 #define VER_MAJOR(x)	((x) >> 8)
 #define VER_MINOR(x)	((x) & 0xff)
 
@@ -68,35 +74,108 @@ static void intr_handler();
 static void start_dma_transfer(uint32_t addr, int size);
 static void write_dsp(unsigned char val);
 static unsigned char read_dsp(void);
+static void write_mix(unsigned char val, int reg);
+static unsigned char read_mix(int reg);
 static int get_dsp_version(void);
 static const char *sbname(int ver);
 
 extern unsigned char low_mem_buffer[];
 
 static int base_port;
-static int irq, dma_chan;
+static int irq, dma_chan, dma16_chan;
 static int sb16;
 static void *buffer;
 static int xfer_mode;
 
 int sb_detect(void)
 {
-	int i, ver;
+	int i, j, ver, tmp, irqsel, dmasel;
+	static int irqtab[] = {2, 5, 7, 10};
+	static int dmatab[] = {0, 1, -1, 3, -1, 5, 6, 7};
 
 	for(i=0; i<6; i++) {
 		base_port = 0x200 + ((i + 1) << 4);
 		if(sb_reset_dsp() == 0) {
 			ver = get_dsp_version();
 			sb16 = VER_MAJOR(ver) >= 4;
-			printf("sb_detect: found %s (DSP v%d.%02d) at port %xh\n", sbname(ver),
-					VER_MAJOR(ver), VER_MINOR(ver), base_port);
+
+			if(sb16) {
+				irq = 0;
+				irqsel = read_mix(MIX_IRQ_SEL);
+				for(j=0; j<4; j++) {
+					if(irqsel & (1 << j)) {
+						irq = irqtab[j];
+						break;
+					}
+				}
+				if(!irq) {
+					/* try to force IRQ 5 */
+					write_mix(2, MIX_IRQ_SEL);	/* bit1 selects irq 5 */
+
+					/* re-read to verify */
+					irqsel = read_mix(MIX_IRQ_SEL);
+					if(irqsel != 2) {
+						printf("sb_detect: failed to configure IRQ\n");
+						return 0;
+					}
+					irq = 5;
+				}
+
+				dma_chan = -1;
+				dma16_chan = -1;
+				dmasel = read_mix(MIX_DMA_SEL);
+				for(j=0; j<4; j++) {
+					if(dmasel & (1 << j)) {
+						dma_chan = dmatab[j];
+						break;
+					}
+				}
+				for(j=5; j<8; j++) {
+					if(dmasel & (1 << j)) {
+						dma16_chan = dmatab[j];
+						break;
+					}
+				}
+				if(dma_chan == -1) {
+					/* try to force DMA 1 */
+					dmasel |= 2;
+				}
+				if(dma16_chan == -1) {
+					/* try to force 16bit DMA 5 */
+					dmasel |= 0x20;
+				}
+
+				if(dma_chan == -1 || dma16_chan == -1) {
+					write_mix(dmasel, MIX_DMA_SEL);
+
+					/* re-read to verify */
+					tmp = read_mix(MIX_DMA_SEL);
+					if(tmp != dmasel) {
+						printf("sb_detect: failed to configure DMA\n");
+						return 0;
+					}
+					dma_chan = 1;
+					dma16_chan = 5;
+				}
+
+				printf("sb_detect: found %s (DSP v%d.%02d) at port %xh, irq %d, dma %d/%d\n",
+						sbname(ver), VER_MAJOR(ver), VER_MINOR(ver),
+						base_port, irq, dma_chan, dma16_chan);
+
+			} else {
+				/* XXX for old sound blasters, hard-code to IRQ 5 DMA 1 for now */
+				irq = 5;
+				dma_chan = 1;
+				dma16_chan = -1;
+
+				printf("sb_detect: found %s (DSP v%d.%02d) at port %xh\n", sbname(ver),
+						VER_MAJOR(ver), VER_MINOR(ver), base_port);
+				printf("sb_detect: old sound blaster dsp. assuming: irq 5, dma 1\n");
+			}
+
 			return 1;
 		}
 	}
-
-	/* TODO: detect these somehow? */
-	irq = 5;
-	dma_chan = 1;
 
 	return 0;
 }
@@ -164,7 +243,9 @@ void sb_start(int rate, int nchan)
 
 	interrupt(IRQ_TO_INTR(irq), intr_handler);
 
+	sb_set_output_rate(rate);
 	start_dma_transfer(addr, size);
+	write_dsp(CMD_ENABLE_OUTPUT);
 }
 
 void sb_pause(void)
@@ -180,6 +261,7 @@ void sb_continue(void)
 void sb_stop(void)
 {
 	write_dsp(CMD_END_DMA8);
+	write_dsp(CMD_DISABLE_OUTPUT);
 }
 
 void sb_volume(int vol)
@@ -225,6 +307,18 @@ static unsigned char read_dsp(void)
 {
 	while((inb(REG_RSTAT) & RSTAT_RDY) == 0);
 	return inb(REG_RDATA);
+}
+
+static void write_mix(unsigned char val, int reg)
+{
+	outb(reg, REG_MIXPORT);
+	outb(val, REG_MIXDATA);
+}
+
+static unsigned char read_mix(int reg)
+{
+	outb(reg, REG_MIXPORT);
+	return inb(REG_MIXDATA);
 }
 
 static int get_dsp_version(void)

@@ -36,7 +36,7 @@ static uint16_t cursor[] = {
 static int click;
 
 /* defined in sndsamples.s */
-extern void *snd_click;
+extern signed char snd_click[];
 extern int snd_click_size;
 
 int vbetest(void)
@@ -176,7 +176,24 @@ static void draw_cursor(int x, int y, uint16_t col)
 static int click_sound_callback(void *buffer, int size, void *cls)
 {
 	if(click) {
-		memcpy(buffer, snd_click, snd_click_size);
+		int i;
+		signed char *ptr = buffer;
+		signed char *src = snd_click;
+		/*
+		for(i=0; i<size; i++) {
+			if((i / 32) & 1) {
+				*ptr++ = -64;
+			} else {
+				*ptr++ = 64;
+			}
+		}
+		*/
+		/*memcpy(buffer, snd_click, snd_click_size);*/
+
+		for(i=0; i<snd_click_size; i++) {
+			*ptr++ = *src++;
+		}
+
 		click = 0;
 		return snd_click_size;
 	}
