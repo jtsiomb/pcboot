@@ -19,12 +19,70 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "audio.h"
 #include "au_sb.h"
 
-void init_audio(void)
+struct audrv {
+	void *(*get_buffer)(int *size);
+	void (*start)(int rate, int nchan);
+	void (*pause)(void);
+	void (*cont)(void);
+	void (*stop)(void);
+	void (*volume)(int vol);
+};
+
+static struct audrv drv;
+
+static audio_callback_func cbfunc;
+static void *cbcls;
+
+void audio_init(void)
 {
 	if(sb_detect()) {
-		/* TODO use the sound blaster */
+		drv.get_buffer = sb_buffer;
+		drv.start = sb_start;
+		drv.pause = sb_pause;
+		drv.cont = sb_continue;
+		drv.stop = sb_stop;
+		drv.volume = sb_volume;
 		return;
 	}
 
 	printf("No supported audio device detected\n");
+}
+
+void audio_set_callback(audio_callback_func func, void *cls)
+{
+	cbfunc = func;
+	cbcls = cls;
+}
+
+int audio_callback(void *buf, int sz)
+{
+	if(!cbfunc) {
+		return 0;
+	}
+	return cbfunc(buf, sz, cbcls);
+}
+
+void audio_play(int rate, int nchan)
+{
+	drv.start(rate, nchan);
+}
+
+void audio_pause(void)
+{
+	drv.pause();
+}
+
+void audio_resume(void)
+{
+	drv.cont();
+}
+
+void audio_stop(void)
+{
+	drv.stop();
+}
+
+void audio_volume(int vol)
+{
+	drv.volume(vol);
 }

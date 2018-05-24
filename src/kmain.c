@@ -49,7 +49,7 @@ void pcboot_main(void)
 	/* initialize the timer */
 	init_timer();
 
-	init_audio();
+	audio_init();
 
 	enable_intr();
 

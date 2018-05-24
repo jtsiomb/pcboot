@@ -15,21 +15,20 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef AUDIO_H_
-#define AUDIO_H_
+#ifndef DMA_H_
+#define DMA_H_
 
-typedef int (*audio_callback_func)(void *buffer, int size, void *cls);
+#include <inttypes.h>
 
-void audio_init(void);
+enum {
+	DMA_SINGLE	= 0x01,
+	DMA_BLOCK	= 0x02,
+	DMA_CASCADE = DMA_SINGLE | DMA_BLOCK,
+	DMA_DECR	= 0x08,
+	DMA_AUTO	= 0x10
+};
 
-void audio_set_callback(audio_callback_func func, void *cls);
-int audio_callback(void *buf, int sz);
+void dma_out(int chan, uint32_t phyaddr, int size, unsigned int flags);
+void dma_in(int chan, uint32_t phyaddr, int size, unsigned int flags);
 
-void audio_play(int rate, int nchan);
-void audio_pause(void);
-void audio_resume(void);
-void audio_stop(void);
-
-void audio_volume(int vol);
-
-#endif	/* AUDIO_H_ */
+#endif	/* DMA_H_ */

@@ -1,5 +1,5 @@
 csrc = $(wildcard src/*.c) $(wildcard src/libc/*.c) $(wildcard src/test/*.c)
-ssrc = $(wildcard src/*.s) $(wildcard src/libc/*.s) $(wildcard src/boot/*.s)
+ssrc = $(wildcard src/*.s) $(wildcard src/libc/*.s) $(wildcard src/boot/*.s) $(wildcard src/test/*.s)
 Ssrc = $(wildcard src/*.S)
 obj = $(csrc:.c=.o) $(ssrc:.s=.o) $(Ssrc:.S=.o)
 dep = $(obj:.o=.d)

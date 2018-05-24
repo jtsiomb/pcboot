@@ -28,4 +28,15 @@ int sb_detect(void);
  */
 int sb_reset_dsp(void);
 
+void *sb_buffer(int *size);
+
+void sb_set_output_rate(int rate);
+
+void sb_start(int rate, int nchan);
+void sb_pause(void);
+void sb_continue(void);
+void sb_stop(void);
+
+void sb_volume(int vol);
+
 #endif	/* AU_SB_H_ */

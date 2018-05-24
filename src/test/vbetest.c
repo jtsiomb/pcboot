@@ -5,8 +5,10 @@
 #include "keyb.h"
 #include "psaux.h"
 #include "contty.h"
+#include "audio.h"
 
 static void draw_cursor(int x, int y, uint16_t col);
+static int click_sound_callback(void *buffer, int size, void *cls);
 
 static uint16_t *framebuf;
 
@@ -31,10 +33,16 @@ static uint16_t cursor[] = {
 	0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0xffff, 0xffff, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000
 };
 
+static int click;
+
+/* defined in sndsamples.s */
+extern void *snd_click;
+extern int snd_click_size;
+
 int vbetest(void)
 {
 	int i, j, nmodes, mx, my;
-	unsigned int st;
+	unsigned int st, prev_st = 0;
 	struct video_mode vi;
 	uint16_t *fbptr;
 
@@ -78,6 +86,8 @@ int vbetest(void)
 
 	set_mouse_bounds(0, 0, 639, 479);
 
+	audio_set_callback(click_sound_callback, 0);
+
 	/* empty the kb queue */
 	while(kb_getkey() != -1);
 
@@ -87,6 +97,20 @@ int vbetest(void)
 		}
 
 		st = mouse_state(&mx, &my);
+
+		for(i=0; i<3; i++) {
+			unsigned int bit = 1 << i;
+			if(((st & bit) ^ (prev_st & bit)) & (st & bit)) {
+				click = 1;
+			}
+		}
+		if(click) {
+			printf("click!\n");
+			audio_play(22050, 1);
+		}
+
+		prev_st = st;
+
 		draw_cursor(mx, my, st & 1 ? 0xf800 : (st & 2 ? 0x7e0 : (st & 4 ? 0x00ff : 0)));
 
 		halt_cpu();
@@ -146,4 +170,15 @@ static void draw_cursor(int x, int y, uint16_t col)
 		dest += 640 - w;
 		savp += CURSOR_XSZ - w;
 	}
+}
+
+/* snd_click_size is < 65536 so we can just throw it all at once in there */
+static int click_sound_callback(void *buffer, int size, void *cls)
+{
+	if(click) {
+		memcpy(buffer, snd_click, snd_click_size);
+		click = 0;
+		return snd_click_size;
+	}
+	return 0;
 }
