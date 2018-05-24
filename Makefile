@@ -16,6 +16,7 @@ CFLAGS = $(ccarch) -march=i386 $(warn) $(opt) $(dbg) $(gccopt) $(inc) $(def)
 ASFLAGS = $(asarch) -march=i386 $(dbg) -nostdinc -fno-builtin $(inc)
 LDFLAGS = $(ldarch) -nostdlib -T pcboot.ld -print-gc-sections
 
+QEMU_FLAGS = -fda floppy.img -serial file:serial.log -soundhw sb16
 
 ifneq ($(shell uname -m), i386)
 	ccarch = -m32
@@ -71,11 +72,11 @@ $(elf).sym: $(elf)
 
 .PHONY: run
 run: $(bin)
-	qemu-system-i386 -fda floppy.img -serial file:serial.log
+	qemu-system-i386 $(QEMU_FLAGS)
 
 .PHONY: debug
 debug: $(bin) $(elf).sym
-	qemu-system-i386 -fda floppy.img -serial file:serial.log -s -S
+	qemu-system-i386 $(QEMU_FLAGS) -s -S
 
 .PHONY: sym
 sym: $(elf).sym

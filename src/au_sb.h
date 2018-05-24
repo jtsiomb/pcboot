@@ -15,17 +15,17 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef _TIMER_H_
-#define _TIMER_H_
+#ifndef AU_SB_H_
+#define AU_SB_H_
 
-#define MSEC_TO_TICKS(ms)	((ms) * TICK_FREQ_HZ / 1000)
-#define TICKS_TO_MSEC(tk)	((tk) * 1000 / TICK_FREQ_HZ)
+/* returns true (nonzero) if a sound blaster DSP is detected in the ISA bus
+ * and sets the internal base_port so that subsequent calls can find it
+ */
+int sb_detect(void);
 
-volatile unsigned long nticks;
+/* returns 0 for success, non-zero if the DSP isn't responding at the currently
+ * selected base port
+ */
+int sb_reset_dsp(void);
 
-void init_timer(void);
-
-int sys_sleep(int sec);
-void sleep(unsigned long msec);
-
-#endif	/* _TIMER_H_ */
+#endif	/* AU_SB_H_ */

@@ -15,17 +15,16 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef _TIMER_H_
-#define _TIMER_H_
+#include <stdio.h>
+#include "audio.h"
+#include "au_sb.h"
 
-#define MSEC_TO_TICKS(ms)	((ms) * TICK_FREQ_HZ / 1000)
-#define TICKS_TO_MSEC(tk)	((tk) * 1000 / TICK_FREQ_HZ)
+void init_audio(void)
+{
+	if(sb_detect()) {
+		/* TODO use the sound blaster */
+		return;
+	}
 
-volatile unsigned long nticks;
-
-void init_timer(void);
-
-int sys_sleep(int sec);
-void sleep(unsigned long msec);
-
-#endif	/* _TIMER_H_ */
+	printf("No supported audio device detected\n");
+}

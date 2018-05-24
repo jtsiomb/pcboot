@@ -55,8 +55,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define CMD_MODE_BCD		1
 
 
-#define MSEC_TO_TICKS(ms)	((ms) * TICK_FREQ_HZ / 1000)
-
 struct timer_event {
 	int dt;	/* remaining ticks delta from the previous event */
 	struct timer_event *next;
