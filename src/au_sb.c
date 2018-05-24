@@ -77,6 +77,8 @@ static unsigned char read_dsp(void);
 static void write_mix(unsigned char val, int reg);
 static unsigned char read_mix(int reg);
 static int get_dsp_version(void);
+static int sb16_detect_irq(void);
+static int sb16_detect_dma(void);
 static const char *sbname(int ver);
 
 extern unsigned char low_mem_buffer[];
@@ -89,9 +91,7 @@ static int xfer_mode;
 
 int sb_detect(void)
 {
-	int i, j, ver, tmp, irqsel, dmasel;
-	static int irqtab[] = {2, 5, 7, 10};
-	static int dmatab[] = {0, 1, -1, 3, -1, 5, 6, 7};
+	int i, ver;
 
 	for(i=0; i<6; i++) {
 		base_port = 0x200 + ((i + 1) << 4);
@@ -100,62 +100,13 @@ int sb_detect(void)
 			sb16 = VER_MAJOR(ver) >= 4;
 
 			if(sb16) {
-				irq = 0;
-				irqsel = read_mix(MIX_IRQ_SEL);
-				for(j=0; j<4; j++) {
-					if(irqsel & (1 << j)) {
-						irq = irqtab[j];
-						break;
-					}
+				if(sb16_detect_irq() == -1) {
+					printf("sb_detect: failed to configure IRQ\n");
+					return 0;
 				}
-				if(!irq) {
-					/* try to force IRQ 5 */
-					write_mix(2, MIX_IRQ_SEL);	/* bit1 selects irq 5 */
-
-					/* re-read to verify */
-					irqsel = read_mix(MIX_IRQ_SEL);
-					if(irqsel != 2) {
-						printf("sb_detect: failed to configure IRQ\n");
-						return 0;
-					}
-					irq = 5;
-				}
-
-				dma_chan = -1;
-				dma16_chan = -1;
-				dmasel = read_mix(MIX_DMA_SEL);
-				for(j=0; j<4; j++) {
-					if(dmasel & (1 << j)) {
-						dma_chan = dmatab[j];
-						break;
-					}
-				}
-				for(j=5; j<8; j++) {
-					if(dmasel & (1 << j)) {
-						dma16_chan = dmatab[j];
-						break;
-					}
-				}
-				if(dma_chan == -1) {
-					/* try to force DMA 1 */
-					dmasel |= 2;
-				}
-				if(dma16_chan == -1) {
-					/* try to force 16bit DMA 5 */
-					dmasel |= 0x20;
-				}
-
-				if(dma_chan == -1 || dma16_chan == -1) {
-					write_mix(dmasel, MIX_DMA_SEL);
-
-					/* re-read to verify */
-					tmp = read_mix(MIX_DMA_SEL);
-					if(tmp != dmasel) {
-						printf("sb_detect: failed to configure DMA\n");
-						return 0;
-					}
-					dma_chan = 1;
-					dma16_chan = 5;
+				if(sb16_detect_dma() == -1) {
+					printf("sb_detect: failed to configure DMA\n");
+					return 0;
 				}
 
 				printf("sb_detect: found %s (DSP v%d.%02d) at port %xh, irq %d, dma %d/%d\n",
@@ -330,6 +281,78 @@ static int get_dsp_version(void)
 	minor = read_dsp();
 
 	return (major << 8) | minor;
+}
+
+static int sb16_detect_irq(void)
+{
+	int i, irqsel;
+	static int irqtab[] = {2, 5, 7, 10};
+
+	irq = 0;
+	irqsel = read_mix(MIX_IRQ_SEL);
+	for(i=0; i<4; i++) {
+		if(irqsel & (1 << i)) {
+			irq = irqtab[i];
+			break;
+		}
+	}
+	if(!irq) {
+		/* try to force IRQ 5 */
+		write_mix(2, MIX_IRQ_SEL);	/* bit1 selects irq 5 */
+
+		/* re-read to verify */
+		irqsel = read_mix(MIX_IRQ_SEL);
+		if(irqsel != 2) {
+			return -1;
+		}
+		irq = 5;
+	}
+
+	return irq;
+}
+
+static int sb16_detect_dma(void)
+{
+	int i, dmasel, tmp;
+	static int dmatab[] = {0, 1, -1, 3, -1, 5, 6, 7};
+
+	dma_chan = -1;
+	dma16_chan = -1;
+	dmasel = read_mix(MIX_DMA_SEL);
+	for(i=0; i<4; i++) {
+		if(dmasel & (1 << i)) {
+			dma_chan = dmatab[i];
+			break;
+		}
+	}
+	for(i=5; i<8; i++) {
+		if(dmasel & (1 << i)) {
+			dma16_chan = dmatab[i];
+			break;
+		}
+	}
+	if(dma_chan == -1) {
+		/* try to force DMA 1 */
+		dmasel |= 2;
+	}
+	if(dma16_chan == -1) {
+		/* try to force 16bit DMA 5 */
+		dmasel |= 0x20;
+	}
+
+	if(dma_chan == -1 || dma16_chan == -1) {
+		write_mix(dmasel, MIX_DMA_SEL);
+
+		/* re-read to verify */
+		tmp = read_mix(MIX_DMA_SEL);
+		if(tmp != dmasel) {
+			return -1;
+		}
+		dma_chan = 1;
+		dma16_chan = 5;
+	}
+
+	return dma_chan;
 }
 
 #define V(maj, min)	(((maj) << 8) | (min))
