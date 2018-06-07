@@ -103,7 +103,7 @@ void init_pci(void)
 	for(i=0; i<256; i++) {
 		count += enum_bus(i);
 	}
-	printf("found %d PCI devices\n", count);
+	printf("found %d PCI devices\n\n", count);
 }
 
 static int enum_bus(int busid)
