@@ -234,7 +234,7 @@ void ser_putc(int fd, char c)
 	}
 
 	while(!can_send(fd));
-	while((inb(base + UART_MSTAT) & MST_CTS) == 0);
+	/*while((inb(base + UART_MSTAT) & MST_CTS) == 0);*/
 	outb(c, base + UART_DATA);
 }
 

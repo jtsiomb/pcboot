@@ -22,6 +22,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define TICK_FREQ_HZ		250
 
 #define CON_TEXTMODE
-#undef CON_SERIAL
+#define CON_SERIAL
 
 #endif	/* PCBOOT_CONFIG_H_ */
