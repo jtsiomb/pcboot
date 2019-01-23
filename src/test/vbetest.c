@@ -105,7 +105,6 @@ int vbetest(void)
 			}
 		}
 		if(click) {
-			printf("click!\n");
 			audio_play(22050, 1);
 		}
 
