@@ -194,9 +194,9 @@ void sb_start(int rate, int nchan)
 
 	interrupt(IRQ_TO_INTR(irq), intr_handler);
 
+	write_dsp(CMD_ENABLE_OUTPUT);
 	sb_set_output_rate(rate);
 	start_dma_transfer(addr, size);
-	write_dsp(CMD_ENABLE_OUTPUT);
 }
 
 void sb_pause(void)
@@ -241,7 +241,7 @@ static void start_dma_transfer(uint32_t addr, int size)
 	dma_out(dma_chan, addr, size, DMA_SINGLE);
 
 	/* program the DSP to accept the DMA transfer */
-	write_dsp(CMD_START_DMA8 | CMD_FIFO);
+	write_dsp(CMD_START_DMA8);
 	write_dsp(xfer_mode);
 	size--;
 	write_dsp(size & 0xff);

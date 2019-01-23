@@ -117,8 +117,8 @@ static void dma_io(int chan, uint32_t phyaddr, int size, unsigned int flags, uns
 	mask(chan);
 	outb(0, DMA_CLR_FLIPFLOP(chan));
 
-	/* single / block / cascade */
-	mode = ((flags & 3) << 6) | MODE_CHAN(chan);
+	/* first 2 bits of flags correspond to the mode bits 6,7 */
+	mode = ((flags & 3) << 6) | dir | MODE_CHAN(chan);
 	if(flags & DMA_DECR) mode |= MODE_DECR;
 	if(flags & DMA_AUTO) mode |= MODE_AUTO;
 	outb(mode, DMA_MODE(chan));

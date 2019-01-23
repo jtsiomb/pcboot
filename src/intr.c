@@ -116,7 +116,10 @@ struct intr_frame *get_intr_frame(void)
 /* set an interrupt handler function for a particular interrupt */
 void interrupt(int intr_num, intr_func_t func)
 {
+	int iflag = get_intr_flag();
+	disable_intr();
 	intr_func[intr_num] = func;
+	set_intr_flag(iflag);
 }
 
 /* this function is called from all interrupt entry points
