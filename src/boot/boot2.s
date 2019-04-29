@@ -766,6 +766,7 @@ saved_ebp: .long 0
 saved_eax: .long 0
 saved_es: .word 0
 saved_ds: .word 0
+saved_flags: .word 0
 
 	# drop back to unreal mode to call 16bit interrupt
 	.global int86
@@ -827,6 +828,9 @@ int_op:	int $0
 	mov %eax, saved_eax
 	mov %ds, saved_ds
 	mov %es, saved_es
+	pushfw
+	pop %ax
+	mov %ax, saved_flags
 
 	# re-enable protection
 	mov %cr0, %eax
@@ -851,7 +855,8 @@ int_op:	int $0
 	pushw %ax
 	mov saved_es, %ax
 	pushw %ax
-	pushfw
+	mov saved_flags, %ax
+	pushw %ax
 	mov saved_eax, %eax
 	pushal
 	mov saved_esp, %esp
