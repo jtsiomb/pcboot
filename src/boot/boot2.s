@@ -230,7 +230,7 @@ ldloop:
 	# just in case we were loaded from floppy, turn all floppy motors off
 	mov $0x3f2, %dx
 	in %dx, %al
-	and $0xf0, %al
+	and $0xf, %al
 	out %al, %dx
 
 	mov $10, %ax
