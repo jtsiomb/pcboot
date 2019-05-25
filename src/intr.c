@@ -54,7 +54,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define OCW2_EOI	(1 << 5)
 
 
-static void init_pic(int offset);
+void init_pic(void);
 static void gate_desc(desc_t *desc, uint16_t sel, uint32_t addr, int dpl, int type);
 
 /* defined in intr_asm.S */
@@ -101,7 +101,7 @@ void init_intr(void)
 	/* initialize the programmable interrupt controller
 	 * setting up the maping of IRQs [0, 15] to interrupts [32, 47]
 	 */
-	init_pic(IRQ_OFFSET);
+	init_pic();
 	eoi_pending = 0;
 }
 
@@ -149,14 +149,14 @@ void dispatch_intr(struct intr_frame frm)
 	}
 }
 
-static void init_pic(int offset)
+void init_pic(void)
 {
 	/* send ICW1 saying we'll follow with ICW4 later on */
 	outb(ICW1_INIT | ICW1_ICW4_NEEDED, PIC1_CMD);
 	outb(ICW1_INIT | ICW1_ICW4_NEEDED, PIC2_CMD);
 	/* send ICW2 with IRQ remapping */
-	outb(offset, PIC1_DATA);
-	outb(offset + 8, PIC2_DATA);
+	outb(IRQ_OFFSET, PIC1_DATA);
+	outb(IRQ_OFFSET + 8, PIC2_DATA);
 	/* send ICW3 to setup the master/slave relationship */
 	/* ... set bit3 = 3rd interrupt input has a slave */
 	outb(4, PIC1_DATA);
@@ -196,6 +196,49 @@ void set_intr_entry(int num, void (*handler)(void))
 
 	gate_desc(idt + num, selector(SEGM_KCODE, 0), (uint32_t)handler, dpl, type);
 }
+
+void set_pic_mask(int pic, unsigned char mask)
+{
+	outb(mask, pic > 0 ? PIC2_DATA : PIC1_DATA);
+}
+
+unsigned char get_pic_mask(int pic)
+{
+	return inb(pic > 0 ? PIC2_DATA : PIC1_DATA);
+}
+
+void mask_irq(int irq)
+{
+	int port;
+	unsigned char mask;
+
+	if(irq < 8) {
+		port = PIC1_DATA;
+	} else {
+		port = PIC2_DATA;
+		irq -= 8;
+	}
+
+	mask = inb(port) | (1 << irq);
+	outb(mask, port);
+}
+
+void unmask_irq(int irq)
+{
+	int port;
+	unsigned char mask;
+
+	if(irq < 8) {
+		port = PIC1_DATA;
+	} else {
+		port = PIC2_DATA;
+		irq -= 8;
+	}
+
+	mask = inb(port) & ~(1 << irq);
+	outb(mask, port);
+}
+
 
 void end_of_irq(int irq)
 {
