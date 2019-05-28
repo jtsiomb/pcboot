@@ -32,6 +32,8 @@ void utoa(unsigned int val, char *buf, int base);
 
 /* defined in malloc.c */
 void *malloc(size_t sz);
+void *calloc(size_t num, size_t sz);
+void *realloc(void *ptr, size_t sz);
 void free(void *ptr);
 
 #endif	/* STDLIB_H_ */
