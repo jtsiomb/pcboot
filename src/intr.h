@@ -72,6 +72,11 @@ void interrupt(int intr_num, intr_func_t func);
  */
 void set_intr_entry(int num, void (*handler)(void));
 
+void set_pic_mask(int pic, unsigned char mask);
+unsigned char get_pic_mask(int pic);
+void mask_irq(int irq);
+void unmask_irq(int irq);
+
 /* defined in intr_asm.S */
 int get_intr_flag(void);
 void set_intr_flag(int onoff);

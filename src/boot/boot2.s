@@ -1,5 +1,5 @@
 # pcboot - bootable PC demo/game kernel
-# Copyright (C) 2018  John Tsiombikas <nuclear@member.fsf.org>
+# Copyright (C) 2018-2019  John Tsiombikas <nuclear@member.fsf.org>
 # 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,9 +21,16 @@
 	.section .boot2,"ax"
 
 	.set main_load_addr, 0x100000
+	.set drive_number, 0x7bec
 
 	# make sure any BIOS call didn't re-enable interrupts
 	cli
+
+	xor %eax, %eax
+	mov drive_number, %al
+	mov %eax, boot_drive_number
+
+	call setup_serial
 
 	# enter unreal mode
 	call unreal
@@ -41,9 +48,6 @@
 
 	# load the whole program into memory starting at 1MB
 	call load_main
-
-	#mov $0x13, %ax
-	#int $0x10
 
 	# load initial GDT
 	lgdt (gdt_lim)
@@ -227,11 +231,15 @@ ldloop:
 	# the BIOS might have enabled interrupts
 	cli
 
-	# just in case we were loaded from floppy, turn all floppy motors off
+	# if we were loaded from floppy, turn all floppy motors off
+	movb drive_number, %bl
+	and $0x80, %bl
+	jnz 0f
 	mov $0x3f2, %dx
 	in %dx, %al
-	and $0xf0, %al
+	and $0xf, %al
 	out %al, %dx
+0:
 
 	mov $10, %ax
 	call putchar
@@ -248,7 +256,6 @@ rdfail_msg: .asciz "failed\n"
 
 read_retries: .short 0
 
-	.set drive_number, 0x7bec
 read_track:
 	# set es to the start of the destination buffer to allow reading in
 	# full 64k chunks if necessary
@@ -451,14 +458,51 @@ scrollup:
 
 clearscr:
 	mov $0xb8000, %edi
-	xor %eax, %eax
+	# clear with white-on-black spaces
+	mov $0x07200720, %eax
 	mov $1000, %ecx
 	addr32 rep stosl
 	ret
 
 	.set UART_DATA, 0x3f8
+	.set UART_DIVLO, 0x3f8
+	.set UART_DIVHI, 0x3f9
+	.set UART_FIFO, 0x3fa
+	.set UART_LCTL, 0x3fb
+	.set UART_MCTL, 0x3fc
 	.set UART_LSTAT, 0x3fd
+	.set DIV_9600, 115200 / 9600
+	.set LCTL_8N1, 0x03
+	.set LCTL_DLAB, 0x80
+	.set FIFO_ENABLE_CLEAR, 0x07
+	.set MCTL_DTR_RTS_OUT2, 0x0b
 	.set LST_TREG_EMPTY, 0x20
+
+setup_serial:
+	# set clock divisor
+	mov $LCTL_DLAB, %al
+	mov $UART_LCTL, %dx
+	out %al, %dx
+	mov $DIV_9600, %ax
+	mov $UART_DIVLO, %dx
+	out %al, %dx
+	shr $8, %ax
+	mov $UART_DIVHI, %dx
+	out %al, %dx
+	# set format 8n1
+	mov $LCTL_8N1, %al
+	mov $UART_LCTL, %dx
+	out %al, %dx
+	# clear and enable fifo
+	mov $FIFO_ENABLE_CLEAR, %al
+	mov $UART_FIFO, %dx
+	out %al, %dx
+	# assert RTS and DTR
+	mov $MCTL_DTR_RTS_OUT2, %al
+	mov $UART_MCTL, %dx
+	out %al, %dx
+	ret
+
 
 ser_putchar:
 	push %dx
@@ -766,6 +810,9 @@ saved_ebp: .long 0
 saved_eax: .long 0
 saved_es: .word 0
 saved_ds: .word 0
+saved_flags: .word 0
+saved_pic1_mask: .byte 0
+saved_pic2_mask: .byte 0
 
 	# drop back to unreal mode to call 16bit interrupt
 	.global int86
@@ -777,6 +824,16 @@ int86:
 	# save protected mode IDTR and replace it with the real mode vectors
 	sidt (saved_idtr)
 	lidt (rmidt)
+
+	# save PIC masks
+	pushl $0
+	call get_pic_mask
+	add $4, %esp
+	mov %al, saved_pic1_mask
+	pushl $1
+	call get_pic_mask
+	add $4, %esp
+	mov %al, saved_pic2_mask
 
 	# modify the int instruction. do this here before the
 	# cs-load jumps, to let them flush the instruction cache
@@ -811,7 +868,6 @@ int86:
 	pop %es
 	pop %ds
 	# ignore fs and gs for now, don't think I'm going to need them
-	mov saved_esp, %esp
 
 	# move to the real-mode stack, accessible from ss=0
 	# just in case the BIOS call screws up our unreal mode
@@ -827,6 +883,9 @@ int_op:	int $0
 	mov %eax, saved_eax
 	mov %ds, saved_ds
 	mov %es, saved_es
+	pushfw
+	popw %ax
+	mov %ax, saved_flags
 
 	# re-enable protection
 	mov %cr0, %eax
@@ -851,18 +910,54 @@ int_op:	int $0
 	pushw %ax
 	mov saved_es, %ax
 	pushw %ax
+	# grab the flags and replace the carry bit from the saved flags
 	pushfw
+	popw %ax
+	and $0xfffe, %ax
+	or saved_flags, %ax
+	pushw %ax
 	mov saved_eax, %eax
 	pushal
 	mov saved_esp, %esp
 
 	# restore 32bit interrupt descriptor table
 	lidt (saved_idtr)
+
+	# restore PIC configuration
+	call init_pic
+
+	# restore IRQ masks
+	movzbl saved_pic1_mask, %eax
+	push %eax
+	pushl $0
+	call set_pic_mask
+	add $8, %esp
+
+	movzbl saved_pic2_mask, %eax
+	push %eax
+	pushl $1
+	call set_pic_mask
+	add $8, %esp
+
+	# keyboard voodoo: with some BIOS implementations, after returning from
+	# int13, there's (I guess) leftover data in the keyboard port and we
+	# can't receive any more keyboard interrupts afterwards. Reading from
+	# the keyboard data port (60h) once, seems to resolve this. And it's
+	# cheap enough, so why not... I give up.
+	push %eax
+	in $0x60, %al
+	pop %eax
+
 	sti
 	popal
 	pop %ebp
 	ret
 
+
+	.align 4
+	.global boot_drive_number
+boot_drive_number:
+	.long 0
 
 	# buffer used by the track loader ... to load tracks.
 	.align 16

@@ -28,6 +28,13 @@ floppy.img: boot.img
 	dd if=/dev/zero of=$@ bs=512 count=2880
 	dd if=$< of=$@ conv=notrunc
 
+pcboot.iso: floppy.img
+	rm -rf cdrom
+	git archive --format=tar --prefix=cdrom/ HEAD | tar xf -
+	cp $< cdrom
+	mkisofs -o $@ -R -J -V pcboot -b $< cdrom
+
+
 boot.img: bootldr.bin $(bin)
 	cat bootldr.bin $(bin) >$@
 

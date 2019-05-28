@@ -129,7 +129,7 @@ static int enum_dev(int busid, int dev)
 	if(read_dev_info(&info, busid, dev, 0) == -1) {
 		return 0;
 	}
-	print_dev_info(&info, busid, dev, 0);
+	/*print_dev_info(&info, busid, dev, 0);*/
 
 	count = 1;
 
@@ -138,7 +138,7 @@ static int enum_dev(int busid, int dev)
 			if(read_dev_info(&info, busid, dev, i) == -1) {
 				continue;
 			}
-			print_dev_info(&info, busid, dev, i);
+			/*print_dev_info(&info, busid, dev, i);*/
 			count++;
 		}
 	}

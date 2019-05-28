@@ -105,7 +105,6 @@ int vbetest(void)
 			}
 		}
 		if(click) {
-			printf("click!\n");
 			audio_play(22050, 1);
 		}
 
@@ -176,24 +175,7 @@ static void draw_cursor(int x, int y, uint16_t col)
 static int click_sound_callback(void *buffer, int size, void *cls)
 {
 	if(click) {
-		int i;
-		signed char *ptr = buffer;
-		signed char *src = snd_click;
-		/*
-		for(i=0; i<size; i++) {
-			if((i / 32) & 1) {
-				*ptr++ = -64;
-			} else {
-				*ptr++ = 64;
-			}
-		}
-		*/
-		/*memcpy(buffer, snd_click, snd_click_size);*/
-
-		for(i=0; i<snd_click_size; i++) {
-			*ptr++ = *src++;
-		}
-
+		memcpy(buffer, snd_click, snd_click_size);
 		click = 0;
 		return snd_click_size;
 	}

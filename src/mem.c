@@ -120,14 +120,17 @@ void init_mem(void)
 	}
 	printf("Total usable RAM: %u.%u %s\n", total, 100 * rem / 1024, suffix[i]);
 
-	bmsize = max_pg / 8;	/* size of the useful bitmap in bytes */
+	/* size of the useful part of the bitmap in bytes padded to 4-byte
+	 * boundaries to allow 32bit at a time operations.
+	 */
+	bmsize = (max_pg / 32 + 1) * 4;
 
-	/* mark all pages occupied by the bitmap as usef */
+	/* mark all pages occupied by the bitmap as used */
 	used_end = (uint32_t)bitmap + bmsize - 1;
 
-	printf("marking pages up to %x (page: %d) as used\n", used_end, ADDR_TO_PAGE(used_end));
-
-	for(i=0; i<=used_end; i++) {
+	max_pg = ADDR_TO_PAGE(used_end);
+	printf("marking pages up to %x (page: %d) as used\n", used_end, max_pg);
+	for(i=0; i<=max_pg; i++) {
 		mark_page(i, USED);
 	}
 }
