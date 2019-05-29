@@ -9,6 +9,9 @@ SECTIONS {
 	/* second stage boot loader */
 	.boot2 : {
 		* (.boot2);
+		* (.lowtext);
+		/* .bootend must stay last */
+		* (.bootend);
 		/* pad the boot loader to the next sector boundary */
 		. = ALIGN(512);
 	}
