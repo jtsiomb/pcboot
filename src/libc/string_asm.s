@@ -22,6 +22,7 @@ memset:
 	push %edi
 
 	mov 8(%ebp), %edi
+	push %edi
 	mov 12(%ebp), %al
 	mov %al, %ah
 	mov %ax, %cx
@@ -32,26 +33,29 @@ memset:
 	cmp $0, %ecx
 	jz msdone
 
+	# write 1, 2, or 3 times until we reache a 32bit-aligned dest address
 	mov %edi, %edx
 	and $3, %edx
 	jz msmain
 	jmp *mspre_tab(,%edx,4)
 
 mspre_tab: .long msmain, mspre1, mspre2, mspre3
-mspre1:	stosb
+mspre3:	stosb
 	dec %ecx
 mspre2:	stosb
 	dec %ecx
-mspre3:	stosb
+mspre1:	stosb
 	dec %ecx
 	jz msdone
 
+	# edi is 32bit-aligned here, write ecx>>2 32bit values
 msmain:
 	push %ecx
 	shr $2, %ecx
 	rep stosl
 	pop %ecx
 
+	# write any trailing bytes
 	and $3, %ecx
 	jmp *mspost_tab(,%ecx,4)
 
@@ -61,6 +65,7 @@ mspost2:stosb
 mspost1:stosb
 
 msdone:
+	pop %eax
 	pop %edi
 	pop %ebp
 	ret
@@ -75,6 +80,7 @@ memset16:
 	push %edi
 
 	mov 8(%ebp), %edi
+	push %edi
 	mov 12(%ebp), %ax
 	shl $16, %eax
 	mov 12(%ebp), %ax
@@ -127,7 +133,7 @@ ms16main:
 	jz ms16done
 	stosw
 ms16done:
-
+	pop %eax
 	pop %edi
 	pop %ebp
 	ret

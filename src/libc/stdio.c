@@ -1,6 +1,6 @@
 /*
 pcboot - bootable PC demo/game kernel
-Copyright (C) 2018  John Tsiombikas <nuclear@member.fsf.org>
+Copyright (C) 2018-2019  John Tsiombikas <nuclear@member.fsf.org>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,8 +18,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 #include "contty.h"
 #include "serial.h"
+#include "panic.h"
 
 enum {
 	OUT_DEF,
@@ -30,8 +32,10 @@ enum {
 
 extern void pcboot_putchar(int c);
 
-static void bwrite(int out, char *buf, size_t buf_sz, char *str, int sz);
 static int intern_printf(int out, char *buf, size_t sz, const char *fmt, va_list ap);
+static int intern_scanf(const char *instr, FILE *infile, const char *fmt, va_list ap);
+static void bwrite(int out, char *buf, size_t buf_sz, char *str, int sz);
+/*static int readchar(const char *str, FILE *fp);*/
 
 int putchar(int c)
 {
@@ -49,10 +53,6 @@ int puts(const char *s)
 }
 
 /* -- printf and friends -- */
-
-static char *convc = "dioxXucsfeEgGpn%";
-
-#define IS_CONV(c)	strchr(convc, c)
 
 int printf(const char *fmt, ...)
 {
@@ -102,6 +102,27 @@ int vsnprintf(char *buf, size_t sz, const char *fmt, va_list ap)
 	return intern_printf(OUT_BUF, buf, sz, fmt, ap);
 }
 
+int fprintf(FILE *fp, const char *fmt, ...)
+{
+	int res;
+	va_list ap;
+
+	va_start(ap, fmt);
+	res = vfprintf(fp, fmt, ap);
+	va_end(ap);
+	return res;
+}
+
+int vfprintf(FILE *fp, const char *fmt, va_list ap)
+{
+	if(fp == stdout || fp == stderr) {
+		return vprintf(fmt, ap);
+	}
+
+	panic("*fprintf for anything other than stdout/stderr, not implemented yet\n");
+	return 0;
+}
+
 int ser_printf(const char *fmt, ...)
 {
 	int res;
@@ -118,6 +139,11 @@ int ser_vprintf(const char *fmt, va_list ap)
 	return intern_printf(OUT_SER, 0, 0, fmt, ap);
 }
 
+void perror(const char *s)
+{
+	printf("%s: %s\n", s, strerror(errno));
+}
+
 /* intern_printf provides all the functionality needed by all the printf
  * variants.
  * - buf: optional buffer onto which the formatted results are written. If null
@@ -127,6 +153,9 @@ int ser_vprintf(const char *fmt, va_list ap)
  *   by the (v)snprintf variants to avoid buffer overflows.
  * The rest are obvious, format string and variable argument list.
  */
+static char *convc = "dioxXucsfeEgGpn%";
+
+#define IS_CONV(c)	strchr(convc, c)
 
 #define BUF(x)	((x) ? (x) + cnum : (x))
 #define SZ(x)	((x) ? (x) - cnum : (x))
@@ -145,9 +174,10 @@ static int intern_printf(int out, char *buf, size_t sz, const char *fmt, va_list
 	int fwidth = 0;
 	int padc = ' ';
 	int sign = 0;
-	int left_align = 0;	/* not implemented yet */
+	int left_align = 0;
 	int hex_caps = 0;
 	int unsig = 0;
+	int num, unum;
 
 	while(*fmt) {
 		if(*fmt == '%') {
@@ -167,6 +197,7 @@ static int intern_printf(int out, char *buf, size_t sz, const char *fmt, va_list
 
 					if(alt) {
 						bwrite(out, BUF(buf), SZ(sz), "0x", 2);
+						cnum += 2;
 					}
 
 				case 'u':
@@ -178,15 +209,18 @@ static int intern_printf(int out, char *buf, size_t sz, const char *fmt, va_list
 
 						if(alt) {
 							bwrite(out, BUF(buf), SZ(sz), "0", 1);
+							cnum++;
 						}
 					}
 
 				case 'd':
 				case 'i':
 					if(unsig) {
-						utoa(va_arg(ap, unsigned int), conv_buf, base);
+						unum = va_arg(ap, unsigned int);
+						utoa(unum, conv_buf, base);
 					} else {
-						itoa(va_arg(ap, int), conv_buf, base);
+						num = va_arg(ap, int);
+						itoa(num, conv_buf, base);
 					}
 					if(hex_caps) {
 						for(i=0; conv_buf[i]; i++) {
@@ -195,13 +229,28 @@ static int intern_printf(int out, char *buf, size_t sz, const char *fmt, va_list
 					}
 
 					slen = strlen(conv_buf);
+
+					if(left_align) {
+						if(!unsig && sign && num >= 0) {
+							bwrite(out, BUF(buf), SZ(sz), "+", 1);
+							cnum++;
+						}
+						bwrite(out, BUF(buf), SZ(sz), conv_buf, slen);
+						cnum += slen;
+						padc = ' ';
+					}
 					for(i=slen; i<fwidth; i++) {
 						bwrite(out, BUF(buf), SZ(sz), (char*)&padc, 1);
 						cnum++;
 					}
-
-					bwrite(out, BUF(buf), SZ(sz), conv_buf, strlen(conv_buf));
-					cnum += slen;
+					if(!left_align) {
+						if(!unsig && sign && num >= 0) {
+							bwrite(out, BUF(buf), SZ(sz), "+", 1);
+							cnum++;
+						}
+						bwrite(out, BUF(buf), SZ(sz), conv_buf, slen);
+						cnum += slen;
+					}
 					break;
 
 				case 'c':
@@ -216,12 +265,19 @@ static int intern_printf(int out, char *buf, size_t sz, const char *fmt, va_list
 					str = va_arg(ap, char*);
 					slen = strlen(str);
 
+					if(left_align) {
+						bwrite(out, BUF(buf), SZ(sz), str, slen);
+						cnum += slen;
+						padc = ' ';
+					}
 					for(i=slen; i<fwidth; i++) {
 						bwrite(out, BUF(buf), SZ(sz), (char*)&padc, 1);
 						cnum++;
 					}
-					bwrite(out, BUF(buf), SZ(sz), str, slen);
-					cnum += slen;
+					if(!left_align) {
+						bwrite(out, BUF(buf), SZ(sz), str, slen);
+						cnum += slen;
+					}
 					break;
 
 				case 'n':
@@ -280,8 +336,20 @@ static int intern_printf(int out, char *buf, size_t sz, const char *fmt, va_list
 		}
 	}
 
-	return 0;
+	return cnum;
 }
+
+
+#if 0
+static char *sconvc = "diouxcsefg%";
+
+#define IS_SCONV(c)	strchr(sconvc, c)
+
+static int intern_scanf(const char *instr, FILE *infile, const char *fmt, va_list ap)
+{
+	return -1;	/* TODO */
+}
+#endif
 
 
 /* bwrite is called by intern_printf to transparently handle writing into a
@@ -292,10 +360,9 @@ static void bwrite(int out, char *buf, size_t buf_sz, char *str, int sz)
 	int i;
 
 	if(out == OUT_BUF) {
-		if(buf_sz && buf_sz <= sz) sz = buf_sz - 1;
-		memcpy(buf, str, sz);
-
+		if(buf_sz && buf_sz <= sz) sz = buf_sz;
 		buf[sz] = 0;
+		memcpy(buf, str, sz);
 	} else {
 		switch(out) {
 		case OUT_DEF:
@@ -317,3 +384,24 @@ static void bwrite(int out, char *buf, size_t buf_sz, char *str, int sz)
 	}
 }
 
+/*
+static int readchar(const char *str, FILE *fp)
+{
+	static const char *orig_str;
+	static const char *sptr;
+
+	if(str) {
+		if(str == orig_str) {
+			if(!*sptr) return -1;
+			return *sptr++;
+		} else {
+			orig_str = sptr = str;
+			return readchar(str, fp);
+		}
+	} else {
+		return fgetc(fp);
+	}
+
+	return -1;
+}
+*/

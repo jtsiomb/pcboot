@@ -17,8 +17,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include <stdio.h>
 #include <string.h>
+#include "config.h"
 #include "serial.h"
 #include "asmops.h"
+#include "intr.h"
+#include "panic.h"
 
 #define UART1_BASE	0x3f8
 #define UART2_BASE	0x2f8
@@ -121,22 +124,20 @@ struct serial_port {
 #define BNEXT(x)	(((x) + 1) & 0xff)
 #define BEMPTY(b)	(b##_ridx == b##_widx)
 
-/*
 static int have_recv(int base);
-static void recv_intr(void);*/
+static void recv_intr();
 
 static struct serial_port ports[2];
 static int num_open;
 
 static int uart_base[] = {UART1_BASE, UART2_BASE};
-/*static int uart_irq[] = {UART1_IRQ, UART2_IRQ};*/
+static int uart_irq[] = {UART1_IRQ, UART2_IRQ};
 
 int ser_open(int pidx, int baud, unsigned int mode)
 {
 	unsigned short div = 115200 / baud;
-	int base; /*intr*/
+	int base, intr;
 	unsigned int fmt;
-	/*int prev_if;*/
 
 	if(pidx < 0 || pidx > 1) {
 		printf("ser_open: invalid serial port: %d\n", pidx);
@@ -150,7 +151,7 @@ int ser_open(int pidx, int baud, unsigned int mode)
 	memset(ports + pidx, 0, sizeof ports[pidx]);
 
 	base = uart_base[pidx];
-	/*intr = uart_irq[pidx] | 8;*/
+	intr = uart_irq[pidx];
 
 	if(mode & SER_8N2) {
 		fmt = COM_FMT_8N2;
@@ -158,10 +159,7 @@ int ser_open(int pidx, int baud, unsigned int mode)
 		fmt = COM_FMT_8N1;
 	}
 
-	/*prev_if = disable_intr();*/
-	/* TODO set interrupt handler */
-	/* unmask the appropriate interrupt */
-	/*outb(inb(PIC1_DATA_PORT) & ~(1 << uart_irq[pidx]), PIC1_DATA_PORT);*/
+	interrupt(IRQ_TO_INTR(uart_irq[pidx]), recv_intr);
 
 	outb(LCTL_DLAB, base + UART_LCTL);
 	outb(div & 0xff, base + UART_DIVLO);
@@ -169,12 +167,10 @@ int ser_open(int pidx, int baud, unsigned int mode)
 	outb(fmt, base + UART_LCTL);	/* fmt should be LCTL_8N1, LCTL_8N2 etc */
 	outb(FIFO_ENABLE | FIFO_SEND_CLEAR | FIFO_RECV_CLEAR, base + UART_FIFO);
 	outb(MCTL_DTR | MCTL_RTS | MCTL_OUT2, base + UART_MCTL);
-	/*outb(INTR_RECV, base + UART_INTR);
-
-	restore_intr(prev_if);*/
+	outb(INTR_RECV, base + UART_INTR);
 
 	ports[pidx].base = base;
-	/*ports[pidx].intr = intr;*/
+	ports[pidx].intr = intr;
 	ports[pidx].blocking = 1;
 	++num_open;
 	return pidx;
@@ -183,10 +179,8 @@ int ser_open(int pidx, int baud, unsigned int mode)
 void ser_close(int fd)
 {
 	if(--num_open == 0) {
-		/*int prev_if = disable_intr();*/
-		/*outb(0, ports[fd].base + UART_INTR);*/
+		outb(0, ports[fd].base + UART_INTR);
 		outb(0, ports[fd].base + UART_MCTL);
-		/*restore_intr(prev_if);*/
 	}
 
 	ports[fd].base = 0;
@@ -304,18 +298,16 @@ char *ser_getline(int fd, char *buf, int bsz)
 	return 0;
 }
 
-#if 0
 static int have_recv(int base)
 {
 	unsigned short stat = inb(base + UART_LSTAT);
 	if(stat & LST_ERROR) {
-		printf("serial receive error\n");
-		panic();
+		panic("serial receive error\n");
 	}
 	return stat & LST_DRDY;
 }
 
-static void __interrupt __far recv_intr()
+static void recv_intr()
 {
 	int i, idreg, c;
 
@@ -327,7 +319,14 @@ static void __interrupt __far recv_intr()
 			while(have_recv(base)) {
 				c = inb(base + UART_DATA);
 
-				p->inbuf[p->inbuf_widx] = inb(base + UART_DATA);
+#ifdef ENABLE_GDB_STUB
+				if(c == 3 && i == GDB_SERIAL_PORT) {
+					asm("int $3");
+					continue;
+				}
+#endif
+
+				p->inbuf[p->inbuf_widx] = c;
 				p->inbuf_widx = BNEXT(p->inbuf_widx);
 
 				if(p->inbuf_widx == p->inbuf_ridx) {
@@ -337,7 +336,16 @@ static void __interrupt __far recv_intr()
 			}
 		}
 	}
+}
 
-	outb(OCW2_EOI, PIC1_CMD_PORT);
+#ifdef ENABLE_GDB_STUB
+void putDebugChar(int c)
+{
+	ser_putc(GDB_SERIAL_PORT, c);
+}
+
+int getDebugChar(void)
+{
+	return ser_getc(GDB_SERIAL_PORT);
 }
 #endif

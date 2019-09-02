@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 #include <stdio.h>
 #include <string.h>
+#include "config.h"
 #include "panic.h"
 #include "mem.h"
 #include "intr.h"
@@ -36,6 +37,8 @@ struct mem_range {
 	uint32_t start;
 	uint32_t size;
 };
+
+void move_stack(uint32_t newaddr);	/* defined in startup.s */
 
 static void mark_page(int pg, int used);
 static void add_memory(uint32_t start, size_t size);
@@ -63,7 +66,7 @@ static int bmsize, last_alloc_idx;
 
 void init_mem(void)
 {
-	int i, pg, max_pg = 0;
+	int i, pg, max_used_pg, end_pg = 0;
 	uint32_t used_end, start, end, sz, total = 0, rem;
 	const char *suffix[] = {"bytes", "KB", "MB", "GB"};
 
@@ -107,8 +110,8 @@ void init_mem(void)
 		total += sz;
 
 		pg = ADDR_TO_PAGE(end);
-		if(max_pg < pg) {
-			max_pg = pg;
+		if(end_pg < pg) {
+			end_pg = pg;
 		}
 	}
 
@@ -123,21 +126,29 @@ void init_mem(void)
 	/* size of the useful part of the bitmap in bytes padded to 4-byte
 	 * boundaries to allow 32bit at a time operations.
 	 */
-	bmsize = (max_pg / 32 + 1) * 4;
+	bmsize = (end_pg / 32) * 4;
 
 	/* mark all pages occupied by the bitmap as used */
 	used_end = (uint32_t)bitmap + bmsize - 1;
 
-	max_pg = ADDR_TO_PAGE(used_end);
-	printf("marking pages up to %x (page: %d) as used\n", used_end, max_pg);
-	for(i=0; i<=max_pg; i++) {
+	max_used_pg = ADDR_TO_PAGE(used_end);
+	printf("marking pages up to %x (page: %d) as used\n", used_end, max_used_pg);
+	for(i=0; i<=max_used_pg; i++) {
 		mark_page(i, USED);
 	}
+
+#ifdef MOVE_STACK_RAMTOP
+	/* allocate space for the stack at the top of RAM and move it there */
+	if((pg = alloc_ppages(STACK_PAGES, MEM_STACK)) != -1) {
+		printf("moving stack-top to: %x (%d pages)\n", PAGE_TO_ADDR(end_pg) - 4, STACK_PAGES);
+		move_stack(PAGE_TO_ADDR(pg + STACK_PAGES) - 4);
+	}
+#endif
 }
 
-int alloc_ppage(void)
+int alloc_ppage(int area)
 {
-	return alloc_ppages(1);
+	return alloc_ppages(1, area);
 }
 
 /* free_ppage marks the physical page, free in the allocation bitmap.
@@ -167,26 +178,34 @@ void free_ppage(int pg)
 }
 
 
-int alloc_ppages(int count)
+int alloc_ppages(int count, int area)
 {
-	int i, pg, idx, max, intr_state, found_free = 0;
+	int i, dir, pg, idx, max, intr_state, found_free = 0;
 
 	intr_state = get_intr_flag();
 	disable_intr();
 
-	idx = last_alloc_idx;
-	max = bmsize / 4;
+	if(area == MEM_STACK) {
+		idx = (bmsize - 1) / 4;
+		max = -1;
+		dir = -1;
+	} else {
+		idx = last_alloc_idx;
+		max = bmsize / 4;
+		dir = 1;
+	}
 
-	while(idx <= max) {
+	while(idx != max) {
 		/* if at least one bit is 0 then we have at least
 		 * one free page. find it and try to allocate a range starting from there
 		 */
 		if(bitmap[idx] != 0xffffffff) {
-			for(i=0; i<32; i++) {
-				pg = idx * 32 + i;
+			pg = idx * 32;
+			if(dir < 0) pg += 31;
 
+			for(i=0; i<32; i++) {
 				if(IS_FREE(pg)) {
-					if(!found_free) {
+					if(!found_free && dir > 0) {
 						last_alloc_idx = idx;
 						found_free = 1;
 					}
@@ -196,9 +215,10 @@ int alloc_ppages(int count)
 						return pg;
 					}
 				}
+				pg += dir;
 			}
 		}
-		idx++;
+		idx += dir;
 	}
 
 	set_intr_flag(intr_state);
@@ -278,3 +298,17 @@ static void mark_page(int pg, int used)
 	}
 }
 
+void print_page_bitmap(void)
+{
+	int i;
+
+	for(i=0; i<bmsize/4; i++) {
+		if((i & 3) == 0) {
+			uint32_t pg = i * 32;
+			uint32_t addr = PAGE_TO_ADDR(pg);
+			printf("\n%5d [%08x]:", (int)pg, (unsigned long)addr);
+		}
+		printf(" %08x", bitmap[i]);
+	}
+	printf("\n");
+}

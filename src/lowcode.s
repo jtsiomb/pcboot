@@ -35,6 +35,7 @@ saved_eax: .long 0
 saved_es: .word 0
 saved_ds: .word 0
 saved_flags: .word 0
+saved_if: .byte 0
 saved_pic1_mask: .byte 0
 saved_pic2_mask: .byte 0
 
@@ -44,6 +45,8 @@ int86:
 	push %ebp
 	mov %esp, %ebp
 	pushal
+	call get_intr_flag
+	mov %al, saved_if
 	cli
 	# save protected mode IDTR and replace it with the real mode vectors
 	sidt (saved_idtr)
@@ -80,6 +83,8 @@ int86:
 	mov %ax, %ds
 	mov %ax, %es
 	mov %ax, %ss
+	mov %ax, %fs
+	mov %ax, %gs
 	nop
 
 	# load registers from the int86regs struct
@@ -92,6 +97,11 @@ int86:
 	pop %es
 	pop %ds
 	# ignore fs and gs for now, don't think I'm going to need them
+
+	# move to the real-mode stack, at the top of conventional memory
+	#mov $0x9000, %sp
+	#mov %sp, %ss
+	#mov $0, %esp
 
 	# move to the real-mode stack, accessible from ss=0
 	# just in case the BIOS call screws up our unreal mode
@@ -124,6 +134,8 @@ int_op:	int $0
 	mov %ax, %ds
 	mov %ax, %es
 	mov %ax, %ss
+	mov %ax, %fs
+	mov %ax, %gs
 	nop
 
 	# point the esp to our regs struct, to fill it with pusha/pushf
@@ -168,11 +180,14 @@ int_op:	int $0
 	# can't receive any more keyboard interrupts afterwards. Reading from
 	# the keyboard data port (60h) once, seems to resolve this. And it's
 	# cheap enough, so why not... I give up.
-	push %eax
 	in $0x60, %al
-	pop %eax
 
-	sti
+	# restore interrupts to their previous state
+	movzbl saved_if, %eax
+	pushl %eax
+	call set_intr_flag
+	add $4, %esp
+
 	popal
 	pop %ebp
 	ret

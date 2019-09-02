@@ -4,12 +4,11 @@
 #include "vbe.h"
 #include "asmops.h"
 #include "int86.h"
+#include "boot.h"
 
 #define SEG_ADDR(s)	((uint32_t)(s) << 4)
 
 #define MODE_LFB	(1 << 14)
-
-extern unsigned char low_mem_buffer[];
 
 struct vbe_info *vbe_get_info(void)
 {
@@ -82,4 +81,52 @@ void print_mode_info(struct vbe_mode_info *mi)
 	printf("green bits: %d (mask: %x)\n", (int)mi->gmask_size, maskbits[mi->gmask_size] << mi->gpos);
 	printf("blue bits: %d (mask: %x)\n", (int)mi->bmask_size, maskbits[mi->bmask_size] << mi->bpos);
 	printf("framebuffer address: %x\n", (unsigned int)mi->fb_addr);
+}
+
+int vbe_get_edid(struct vbe_edid *edid)
+{
+	struct int86regs regs;
+
+	memset(&regs, 0, sizeof regs);
+	regs.es = (uint32_t)low_mem_buffer >> 4;
+	regs.eax = 0x4f15;
+	regs.ebx = 1;
+	int86(0x10, &regs);
+
+	if((regs.eax & 0xffff) != 0x4f) {
+		return -1;
+	}
+	memcpy(edid, low_mem_buffer, sizeof *edid);
+	return 0;
+}
+
+int edid_preferred_resolution(struct vbe_edid *edid, int *xres, int *yres)
+{
+	if(memcmp(edid->magic, VBE_EDID_MAGIC, 8) != 0) {
+		return -1;
+	}
+
+	*xres = (int)edid->timing[0].hactive_lsb | ((int)(edid->timing[0].hact_hblank_msb & 0xf0) << 4);
+	*yres = (int)edid->timing[0].vactive_lsb | ((int)(edid->timing[0].vact_vblank_msb & 0xf0) << 4);
+	return 0;
+}
+
+void print_edid(struct vbe_edid *edid)
+{
+	char vendor[4];
+	int xres, yres;
+
+	if(memcmp(edid->magic, VBE_EDID_MAGIC, 8) != 0) {
+		printf("invalid EDID magic\n");
+		return;
+	}
+
+	vendor[0] = (edid->vendor >> 10) & 0x1f;
+	vendor[1] = (edid->vendor >> 5) & 0x1f;
+	vendor[2] = edid->vendor & 0x1f;
+	vendor[3] = 0;
+	printf("Manufacturer: %s\n", vendor);
+
+	edid_preferred_resolution(edid, &xres, &yres);
+	printf("Preferred resolution: %dx%d\n", xres, yres);
 }

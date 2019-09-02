@@ -1,6 +1,6 @@
 /*
-pcboot - bootable PC demo/game kernel
-Copyright (C) 2018  John Tsiombikas <nuclear@member.fsf.org>
+256boss - bootable launcher for 256b intros
+Copyright (C) 2018-2019  John Tsiombikas <nuclear@member.fsf.org>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "intr.h"
 #include "asmops.h"
 #include "timer.h"
+#include "panic.h"
 #include "config.h"
 
 /* frequency of the oscillator driving the 8254 timer */
@@ -57,11 +58,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 struct timer_event {
 	int dt;	/* remaining ticks delta from the previous event */
+	void (*func)(void);
 	struct timer_event *next;
 };
 
-/* defined in intr_asm.S */
-void intr_entry_fast_timer(void);
+static void timer_handler(int inum);
 
 static struct timer_event *evlist;
 
@@ -83,14 +84,99 @@ void init_timer(void)
 	outb((reload_count >> 8) & 0xff, PORT_DATA0);
 
 	/* set the timer interrupt handler */
-	/*interrupt(IRQ_TO_INTR(0), timer_handler);*/
-	/* set low level fast timer interrupt routine directly in the IDT */
-	set_intr_entry(IRQ_TO_INTR(0), intr_entry_fast_timer);
+	interrupt(IRQ_TO_INTR(0), timer_handler);
 }
 
-/*
+void set_alarm(unsigned long msec, void (*func)(void))
+{
+	int ticks, tsum, iflag;
+	struct timer_event *ev, *node;
+
+	if((ticks = MSEC_TO_TICKS(msec)) <= 0) {
+		return;
+	}
+
+	if(!(ev = malloc(sizeof *ev))) {
+		panic("failed to allocate timer event");
+		return;
+	}
+	ev->func = func;
+
+	iflag = get_intr_flag();
+	disable_intr();
+
+	if(!evlist || ticks < evlist->dt) {
+		/* insert at the begining */
+		ev->next = evlist;
+		evlist = ev;
+
+		ev->dt = ticks;
+		if(ev->next) {
+			ev->next->dt -= ticks;
+		}
+	} else {
+		tsum = evlist->dt;
+		node = evlist;
+
+		while(node->next && ticks > tsum + node->next->dt) {
+			tsum += node->next->dt;
+			node = node->next;
+		}
+
+		ev->next = node->next;
+		node->next = ev;
+
+		/* fix the relative times */
+		ev->dt = ticks - tsum;
+		if(ev->next) {
+			ev->next->dt -= ev->dt;
+		}
+	}
+
+	set_intr_flag(iflag);
+}
+
+void cancel_alarm(void (*func)(void))
+{
+	int iflag;
+	struct timer_event *ev, *node;
+	struct timer_event dummy;
+
+	iflag = get_intr_flag();
+	disable_intr();
+
+	dummy.next = evlist;
+	node = &dummy;
+	while(node->next) {
+		ev = node->next;
+		if(ev->func == func) {
+			/* found it */
+			if(ev->next) {
+				ev->next->dt += ev->dt;
+			}
+			node->next = ev->next;
+			free(ev);
+			break;
+		}
+		node = node->next;
+	}
+
+	set_intr_flag(iflag);
+}
+
 static void timer_handler(int inum)
 {
 	nticks++;
+
+	if(evlist) {
+		evlist->dt--;
+
+		while(evlist && evlist->dt <= 0) {
+			struct timer_event *ev = evlist;
+			evlist = evlist->next;
+
+			ev->func();
+			free(ev);
+		}
+	}
 }
-*/

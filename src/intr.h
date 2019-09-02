@@ -72,6 +72,7 @@ void interrupt(int intr_num, intr_func_t func);
  */
 void set_intr_entry(int num, void (*handler)(void));
 
+void prog_pic(int offs);
 void set_pic_mask(int pic, unsigned char mask);
 unsigned char get_pic_mask(int pic);
 void mask_irq(int irq);

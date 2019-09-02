@@ -1,6 +1,6 @@
 /*
 pcboot - bootable PC demo/game kernel
-Copyright (C) 2018  John Tsiombikas <nuclear@member.fsf.org>
+Copyright (C) 2018-2019  John Tsiombikas <nuclear@member.fsf.org>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -15,9 +15,22 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef PANIC_H_
-#define PANIC_H_
+#ifndef LIMITS_H_
+#define LIMITS_H_
 
-void panic(const char *fmt, ...) __attribute__((noreturn));
+#define CHAR_BIT	8
 
-#endif	/* PANIC_H_ */
+#define SHRT_MIN	(-32768)
+#define SHRT_MAX	32767
+#define INT_MIN		(-2147483648)
+#define INT_MAX		2147483647
+#define LONG_MIN	(-2147483648)
+#define LONG_MAX	2147483647
+
+#define USHRT_MAX	65535
+#define UINT_MAX	0xffffffff
+#define ULONG_MAX	0xffffffff
+
+#define PATH_MAX	256
+
+#endif	/* LIMITS_H_ */

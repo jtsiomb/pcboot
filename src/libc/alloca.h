@@ -15,9 +15,9 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-#ifndef PANIC_H_
-#define PANIC_H_
+#ifndef ALLOCA_H_
+#define ALLOCA_H_
 
-void panic(const char *fmt, ...) __attribute__((noreturn));
+#define alloca(x)	__builtin_alloca(x)
 
-#endif	/* PANIC_H_ */
+#endif	/* ALLOCA_H_ */

@@ -24,13 +24,19 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #define BYTES_TO_PAGES(x)		(((uint32_t)(x) + 4095) >> 12)
 
+/* for alloc_ppage/alloc_ppages */
+enum {
+	MEM_HEAP = 0,	/* start searching from the bottom */
+	MEM_STACK = 1	/* start searching from the top */
+};
+
 void init_mem(void);
 
-int alloc_ppage(void);
+int alloc_ppage(int area);
 void free_ppage(int pg);
 
 /* allocate a number of consecutive pages */
-int alloc_ppages(int count);
+int alloc_ppages(int count, int area);
 void free_ppages(int pg0, int count);
 
 /* allocate a specific range of pages.

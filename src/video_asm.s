@@ -25,3 +25,20 @@ wait_vsync:
 	and $8, %al
 	jz 0b
 	ret
+
+	.global set_pal_entry
+set_pal_entry:
+	mov 4(%esp), %al
+	mov $0x3c8, %dx
+	out %al, %dx
+	inc %dx
+	mov 8(%esp), %al
+	shr $2, %al
+	out %al, %dx
+	mov 12(%esp), %al
+	shr $2, %al
+	out %al, %dx
+	mov 16(%esp), %al
+	shr $2, %al
+	out %al, %dx
+	ret

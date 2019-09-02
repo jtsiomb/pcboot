@@ -1,6 +1,6 @@
 /*
 pcboot - bootable PC demo/game kernel
-Copyright (C) 2018  John Tsiombikas <nuclear@member.fsf.org>
+Copyright (C) 2018-2019  John Tsiombikas <nuclear@member.fsf.org>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,10 +18,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #ifndef STDLIB_H_
 #define STDLIB_H_
 
-#include <inttypes.h>
+#include <stddef.h>
 
-typedef int32_t ssize_t;
-typedef uint32_t size_t;
+#define RAND_MAX	2147483647
+
+#define abs(x)	__builtin_abs(x)
 
 int atoi(const char *str);
 long atol(const char *str);
@@ -29,6 +30,19 @@ long strtol(const char *str, char **endp, int base);
 
 void itoa(int val, char *buf, int base);
 void utoa(unsigned int val, char *buf, int base);
+
+double atof(const char *str);
+double strtod(const char *str, char **endp);
+
+int atexit(void (*func)(void));
+
+void abort(void);
+
+void qsort(void *arr, size_t count, size_t size, int (*cmp)(const void*, const void*));
+
+int rand(void);
+int rand_r(unsigned int *seedp);
+void srand(unsigned int seed);
 
 /* defined in malloc.c */
 void *malloc(size_t sz);

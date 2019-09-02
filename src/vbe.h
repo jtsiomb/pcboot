@@ -55,11 +55,64 @@ struct vbe_mode_info {
 	uint8_t reserved4[206];
 } __attribute__((packed));
 
+struct vbe_edid_chroma {
+	unsigned char redgreen_xy_lsb;
+	unsigned char bluewhite_xy_lsb;
+	unsigned char redx_msb, redy_msb;
+	unsigned char greenx_msb, greeny_msb;
+	unsigned char bluex_msb, bluey_msb;
+	unsigned char whitex_msb, whitey_msb;
+} __attribute__((packed));
+
+struct vbe_edid_timing {
+	uint16_t dotclock;
+	unsigned char hactive_lsb, hblank_lsb, hact_hblank_msb;
+	unsigned char vactive_lsb, vblank_lsb, vact_vblank_msb;
+	unsigned char hporch_lsb, hsync_lsb;
+	unsigned char vporch_vsync_lsb;
+	unsigned char hvporch_hvsync_msb;
+	unsigned char hsize_lsb, vsize_lsb;	/* mm */
+	unsigned char hsize_vsize_msb;
+	unsigned char hborder, vborder;
+	unsigned char features;
+} __attribute__((packed));
+
+
+#define VBE_EDID_MAGIC	"\0\xff\xff\xff\xff\xff\xff\0"
+
+struct vbe_edid {
+	char magic[8];
+	uint16_t vendor;
+	uint16_t product;
+	uint32_t serial;
+	unsigned char week, year;
+	unsigned char ver_major, ver_minor;
+
+	unsigned char vidinp;
+	unsigned char hsize, vsize;
+	unsigned char gamma;
+	unsigned char features;
+
+	struct vbe_edid_chroma chroma;
+
+	uint16_t modes_std;
+	unsigned char modes_ext;
+	uint16_t timing_std;
+
+	struct vbe_edid_timing timing[4];
+	unsigned char num_ext, csum;
+
+} __attribute__((packed));
+
 struct vbe_info *vbe_get_info(void);
 struct vbe_mode_info *vbe_get_mode_info(int mode);
 
 int vbe_set_mode(int mode);
 
 void print_mode_info(struct vbe_mode_info *modei);
+
+int vbe_get_edid(struct vbe_edid *edid);
+int edid_preferred_resolution(struct vbe_edid *edid, int *xres, int *yres);
+void print_edid(struct vbe_edid *edid);
 
 #endif	/* VBE_H_ */

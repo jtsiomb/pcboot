@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include "video.h"
 #include "asmops.h"
 
 struct all_registers {
@@ -37,6 +38,7 @@ void panic(const char *fmt, ...)
 	struct all_registers regs;
 	uint32_t eip;
 
+	set_vga_mode(3);
 	disable_intr();
 
 	memset(&regs, 0, sizeof regs);

@@ -41,7 +41,7 @@ extern int snd_click_size;
 
 int vbetest(void)
 {
-	int i, j, nmodes, mx, my;
+	int i, j, nmodes, mx, my, idx;
 	unsigned int st, prev_st = 0;
 	struct video_mode vi;
 	uint16_t *fbptr;
@@ -60,7 +60,12 @@ int vbetest(void)
 		}
 	}
 
-	if(!(framebuf = set_video_mode(find_video_mode(640, 480, 16)))) {
+	if((idx = find_video_mode_idx(640, 480, 16)) == -1) {
+		return -1;
+	}
+	video_mode_info(idx, &vi);
+
+	if(!(framebuf = set_video_mode(vi.mode))) {
 		return -1;
 	}
 	get_color_bits(&vi.rbits, &vi.gbits, &vi.bbits);

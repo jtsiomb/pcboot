@@ -103,10 +103,9 @@ void *set_video_mode(int mode)
 	return (void*)mode_info->fb_addr;
 }
 
-int find_video_mode(int xsz, int ysz, int bpp)
+int find_video_mode_idx(int xsz, int ysz, int bpp)
 {
-	int i;
-	uint16_t best = 0;
+	int i, best = -1, best_bpp = 0;
 	struct vbe_mode_info *inf;
 
 	if(init_once() == -1) return -1;
@@ -116,12 +115,13 @@ int find_video_mode(int xsz, int ysz, int bpp)
 		if(!inf || inf->xres != xsz || inf->yres != ysz) {
 			continue;
 		}
-		if(SAME_BPP(inf->bpp, bpp)) {
-			best = modes[i];
+		if((bpp <= 0 && inf->bpp > best_bpp) || SAME_BPP(inf->bpp, bpp)) {
+			best = i;
+			best_bpp = inf->bpp;
 		}
 	}
 
-	if(!best) {
+	if(best == -1) {
 		printf("Requested video mode (%dx%d %dbpp) is unavailable\n", xsz, ysz, bpp);
 		return -1;
 	}
@@ -196,4 +196,16 @@ unsigned int color_mask(int nbits, int pos)
 {
 	static unsigned int maskbits[] = {0, 1, 3, 7, 0xf, 0x1f, 0x3f, 0x7f, 0xff};
 	return maskbits[nbits] << pos;
+}
+
+const char *get_video_vendor(void)
+{
+	if(init_once() == -1) return 0;
+	return (char*)VBEPTR(vbe_info->oem_vendor_name_ptr);
+}
+
+int get_video_mem_size(void)
+{
+	if(init_once() == -1) return 0;
+	return vbe_info->total_mem << 6;
 }

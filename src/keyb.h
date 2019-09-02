@@ -43,6 +43,15 @@ enum {
 
 void kb_init(void);
 
+void kb_intr_enable(void);
+void kb_intr_disable(void);
+
+int kb_setmode(int mode);
+int kb_getmode(void);
+
+void kb_set_translate(int xlat);
+int kb_get_translate(void);
+
 /* Boolean predicate for testing the current state of a particular key.
  * You may also pass KB_ANY to test if any key is held down.
  */

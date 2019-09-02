@@ -69,5 +69,5 @@ int toupper(int c)
 
 int tolower(int c)
 {
-	return isupper(c) ? (c + ('A' - 'a')) : c;
+	return isupper(c) ? (c - ('A' - 'a')) : c;
 }

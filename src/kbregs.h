@@ -27,6 +27,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #define KB_ACK			0xfa
 #define KB_NACK			0xfe
+#define KB_TEST_PASSED	0x55
+#define KB_TEST_FAILED	0xfc
 
 #define KB_STAT_OUTBUF_FULL	0x01
 #define KB_STAT_INBUF_FULL	0x02
@@ -36,6 +38,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define KB_STAT_AUX			0x20
 #define KB_STAT_TIMEOUT		0x40
 #define KB_STAT_PAR_ERROR	0x80
+
+#define KB_CMD_TEST				0xaa
 
 /* keyboard commands */
 #define KB_CMD_GET_CMDBYTE		0x20
