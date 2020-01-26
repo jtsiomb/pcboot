@@ -37,7 +37,7 @@
 	mov $_bss_size, %ecx
 	cmp $0, %ecx
 	jz skip_bss_zero
-	shr $4, %ecx
+	shr $2, %ecx
 	rep stosl
 skip_bss_zero:
 
