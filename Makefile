@@ -10,7 +10,7 @@ warn = -pedantic -Wall
 #opt = -O2
 dbg = -g
 inc = -Isrc -Isrc/libc -Isrc/test
-gccopt = -fno-pic -ffreestanding -nostdinc -fno-builtin -ffast-math
+gccopt = -fno-pic -ffreestanding -nostdinc -fno-builtin -ffast-math -fcommon
 
 CFLAGS = $(ccarch) -march=i386 $(warn) $(opt) $(dbg) $(gccopt) $(inc) $(def)
 ASFLAGS = $(asarch) -march=i386 $(dbg) -nostdinc -fno-builtin $(inc)
