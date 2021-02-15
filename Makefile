@@ -24,6 +24,17 @@ ifneq ($(shell uname -m), i386)
 	ldarch = -m elf_i386
 endif
 
+# Cross-compiling (e.g., on Mac OS X)
+TOOLPREFIX = x86_64-elf-
+
+ifdef TOOLPREFIX
+    CC = $(TOOLPREFIX)gcc
+    AS = $(TOOLPREFIX)as
+    LD = $(TOOLPREFIX)ld
+    OBJCOPY = $(TOOLPREFIX)objcopy
+    OBJDUMP = $(TOOLPREFIX)objdump
+endif
+
 floppy.img: boot.img
 	dd if=/dev/zero of=$@ bs=512 count=2880
 	dd if=$< of=$@ conv=notrunc
@@ -40,11 +51,11 @@ boot.img: bootldr.bin $(bin)
 
 # bootldr.bin will contain .boot, .boot2, .bootend, and .lowtext
 bootldr.bin: $(elf)
-	objcopy -O binary -j '.boot*' -j .lowtext $< $@
+	$(OBJCOPY) -O binary -j '.boot*' -j .lowtext $< $@
 
 # the main binary will contain every section *except* those
 $(bin): $(elf)
-	objcopy -O binary -R '.boot*' -R .lowtext $< $@
+	$(OBJCOPY) -O binary -R '.boot*' -R .lowtext $< $@
 
 $(elf): $(obj)
 	$(LD) -o $@ $(obj) -Map link.map $(LDFLAGS)
@@ -69,13 +80,13 @@ cleandep:
 disasm: bootldr.disasm $(elf).disasm
 
 bootldr.disasm: $(elf)
-	objdump -d $< -j .boot -j .boot2 -m i8086 >$@
+	$(OBJDUMP) -d $< -j .boot -j .boot2 -m i8086 >$@
 
 $(elf).disasm: $(elf)
-	objdump -d $< -j .startup -j .text -j .lowtext -m i386 >$@
+	$(OBJDUMP) -d $< -j .startup -j .text -j .lowtext -m i386 >$@
 
 $(elf).sym: $(elf)
-	objcopy --only-keep-debug $< $@
+	$(OBJCOPY) --only-keep-debug $< $@
 
 .PHONY: run
 run: $(bin)
