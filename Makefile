@@ -16,7 +16,7 @@ CFLAGS = $(ccarch) -march=i386 $(warn) $(opt) $(dbg) $(gccopt) $(inc) $(def)
 ASFLAGS = $(asarch) -march=i386 $(dbg) -nostdinc -fno-builtin $(inc)
 LDFLAGS = $(ldarch) -nostdlib -T pcboot.ld -print-gc-sections
 
-QEMU_FLAGS = -fda floppy.img -serial file:serial.log -soundhw sb16
+QEMU_FLAGS = -drive file=floppy.img,format=raw,if=floppy -serial file:serial.log -device sb16
 
 ifneq ($(shell uname -m), i386)
 	ccarch = -m32
