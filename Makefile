@@ -24,16 +24,14 @@ ifneq ($(shell uname -m), i386)
 	ldarch = -m elf_i386
 endif
 
-# Cross-compiling (e.g., on Mac OS X)
-TOOLPREFIX = x86_64-elf-
+# uncomment to use a specific toolchain
+#TOOLPREFIX = x86_64-elf-
 
-ifdef TOOLPREFIX
-    CC = $(TOOLPREFIX)gcc
-    AS = $(TOOLPREFIX)as
-    LD = $(TOOLPREFIX)ld
-    OBJCOPY = $(TOOLPREFIX)objcopy
-    OBJDUMP = $(TOOLPREFIX)objdump
-endif
+CC = $(TOOLPREFIX)gcc
+AS = $(TOOLPREFIX)as
+LD = $(TOOLPREFIX)ld
+OBJCOPY = $(TOOLPREFIX)objcopy
+OBJDUMP = $(TOOLPREFIX)objdump
 
 floppy.img: boot.img
 	dd if=/dev/zero of=$@ bs=512 count=2880
