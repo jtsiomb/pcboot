@@ -16,13 +16,22 @@ CFLAGS = $(ccarch) -march=i386 $(warn) $(opt) $(dbg) $(gccopt) $(inc) $(def)
 ASFLAGS = $(asarch) -march=i386 $(dbg) -nostdinc -fno-builtin $(inc)
 LDFLAGS = $(ldarch) -nostdlib -T pcboot.ld -print-gc-sections
 
-QEMU_FLAGS = -fda floppy.img -serial file:serial.log -soundhw sb16
+QEMU_FLAGS = -drive file=floppy.img,format=raw,if=floppy -serial file:serial.log -device sb16
 
 ifneq ($(shell uname -m), i386)
 	ccarch = -m32
 	asarch = --32
 	ldarch = -m elf_i386
 endif
+
+# uncomment to use a specific toolchain
+#TOOLPREFIX = x86_64-elf-
+
+CC = $(TOOLPREFIX)gcc
+AS = $(TOOLPREFIX)as
+LD = $(TOOLPREFIX)ld
+OBJCOPY = $(TOOLPREFIX)objcopy
+OBJDUMP = $(TOOLPREFIX)objdump
 
 floppy.img: boot.img
 	dd if=/dev/zero of=$@ bs=512 count=2880
@@ -40,11 +49,11 @@ boot.img: bootldr.bin $(bin)
 
 # bootldr.bin will contain .boot, .boot2, .bootend, and .lowtext
 bootldr.bin: $(elf)
-	objcopy -O binary -j '.boot*' -j .lowtext $< $@
+	$(OBJCOPY) -O binary -j '.boot*' -j .lowtext $< $@
 
 # the main binary will contain every section *except* those
 $(bin): $(elf)
-	objcopy -O binary -R '.boot*' -R .lowtext $< $@
+	$(OBJCOPY) -O binary -R '.boot*' -R .lowtext $< $@
 
 $(elf): $(obj)
 	$(LD) -o $@ $(obj) -Map link.map $(LDFLAGS)
@@ -69,13 +78,13 @@ cleandep:
 disasm: bootldr.disasm $(elf).disasm
 
 bootldr.disasm: $(elf)
-	objdump -d $< -j .boot -j .boot2 -m i8086 >$@
+	$(OBJDUMP) -d $< -j .boot -j .boot2 -m i8086 >$@
 
 $(elf).disasm: $(elf)
-	objdump -d $< -j .startup -j .text -j .lowtext -m i386 >$@
+	$(OBJDUMP) -d $< -j .startup -j .text -j .lowtext -m i386 >$@
 
 $(elf).sym: $(elf)
-	objcopy --only-keep-debug $< $@
+	$(OBJCOPY) --only-keep-debug $< $@
 
 .PHONY: run
 run: $(bin)
