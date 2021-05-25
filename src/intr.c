@@ -252,6 +252,7 @@ void end_of_irq(int irq)
 	disable_intr();
 
 	if(!eoi_pending) {
+		set_intr_flags(intr_state);
 		return;
 	}
 	eoi_pending = 0;

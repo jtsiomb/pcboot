@@ -411,7 +411,7 @@ static struct fs_node *open(struct filesys *fs, const char *path, unsigned int f
 		fatdent = dent->data;
 
 		if((fatdent->first_cluster_low | fatdent->first_cluster_high) == 0) {
-			if(fatdent->attr == ATTR_DIR) {
+			if(fatdent->attr & ATTR_DIR) {
 				/* ".." entries back to the root directory seem to have a 0
 				 * cluster address as a special case
 				 */
@@ -420,7 +420,7 @@ static struct fs_node *open(struct filesys *fs, const char *path, unsigned int f
 				return 0;	/* but we can't have 0-address files (right?) */
 			}
 		} else {
-			newdir = fatdent->attr == ATTR_DIR ? load_dir(fatfs, fatdent) : 0;
+			newdir = (fatdent->attr & ATTR_DIR) ? load_dir(fatfs, fatdent) : 0;
 		}
 		if(dir != fatfs->rootdir && dir != cwdnode->data) {
 			free_dir(dir);
@@ -659,7 +659,7 @@ static struct fat_dir *load_dir(struct fatfs *fs, struct fat_dirent *dent)
 	char *buf = 0;
 	int bufsz = 0;
 
-	if(dent->attr != ATTR_DIR) return 0;
+	if(!(dent->attr & ATTR_DIR)) return 0;
 
 	addr = dent->first_cluster_low;
 	if(fs->type >= FAT32) {
@@ -720,7 +720,7 @@ static void parse_dir_entries(struct fat_dir *dir)
 				}
 				strcpy(eptr->name, entname);
 				eptr->data = dent;
-				eptr->type = dent->attr == ATTR_DIR ? FSNODE_DIR : FSNODE_FILE;
+				eptr->type = (dent->attr & ATTR_DIR) ? FSNODE_DIR : FSNODE_FILE;
 				eptr->fsize = dent->size_bytes;
 				eptr++;
 			}
@@ -942,7 +942,7 @@ static void dbg_printdir(struct fat_dirent *dir, int max_entries)
 	while(!DENT_IS_NULL(dir) && (!end || dir < end)) {
 		if(!DENT_IS_UNUSED(dir) && dir->attr != ATTR_VOLID && dir->attr != ATTR_LFN) {
 			if(dent_filename(dir, prev, name) > 0) {
-				printf("%s%c\n", name, dir->attr == ATTR_DIR ? '/' : ' ');
+				printf("%s%c\n", name, (dir->attr & ATTR_DIR) ? '/' : ' ');
 			}
 		}
 		if(dir->attr != ATTR_LFN) {
